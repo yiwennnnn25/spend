@@ -36,7 +36,7 @@
   .amt small{font-size:20px;color:var(--ink3);font-weight:600;margin-right:5px}
   .amt.zero{color:var(--ink3)}
 
-  .quick{display:flex;gap:6px;padding:0 16px 10px;overflow-x:auto;min-height:26px;scrollbar-width:none}
+  .quick{display:flex;align-items:center;gap:6px;padding:0 16px 10px;overflow-x:auto;min-height:26px;scrollbar-width:none}
   .quick::-webkit-scrollbar{display:none}
   .chip:first-child{margin-left:auto}
   .chip:last-child{margin-right:auto}
@@ -183,7 +183,7 @@
 
 <script>
 "use strict";
-var APP_VERSION='2026-07-13a'; /*APPVER:2026-07-13a*/
+var APP_VERSION='2026-08-07a'; /*APPVER:2026-08-07a*/
 var DEFAULT_CATS = [
   {e:'🍽️',n:'Eating Out'},{e:'🛒',n:'Groceries'},{e:'🛍️',n:'Shopping'},
   {e:'📦',n:'Online'},{e:'🐾',n:'Gomi'},{e:'📌',n:'Other'},
@@ -282,9 +282,11 @@ function renderKeys(){
 }
 function renderQuick(){
   var q=document.getElementById('quick'); q.innerHTML='';
-  var cut=Date.now()-30*864e5, g={};
+  var now=Date.now(), cut=now-30*864e5, g={};
   entries.forEach(function(e){
-    if(!e.ts || new Date(e.ts).getTime()<cut) return;
+    if(!e.ts) return;
+    var t=new Date(e.ts).getTime();
+    if(t<cut || t>now) return; // future-dated rows (installments) are scheduled, not habits
     var k=e.e+'|'+e.cat+'|'+e.amt+'|'+e.need;
     g[k]=(g[k]||0)+1;
   });
