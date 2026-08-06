@@ -101,7 +101,7 @@
   .copybtn{width:100%;background:var(--mint);color:#fff;border:0;border-radius:13px;font-size:15px;
     font-weight:700;padding:14px;margin-top:18px;cursor:pointer;box-shadow:var(--shadow)}
   .setrow{display:flex;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
-  .setrow input{flex:1;background:var(--card);border:1px solid var(--line);color:var(--ink);
+  .setrow input{flex:1;min-width:0;background:var(--card);border:1px solid var(--line);color:var(--ink);
     border-radius:10px;padding:10px;font-size:14px}
   .mini{font-size:11px;color:var(--ink3);text-align:center;margin-top:8px;line-height:1.6}
   .nudge{margin:0 16px 7px;background:var(--want-bg);border:1px solid var(--line);border-radius:12px;
@@ -192,6 +192,9 @@ var DEFAULT_CATS = [
 var DEFAULT_METHODS = ['HLB','MB','TnG','Cash'];
 var KEY='xpense_entries_v1', CKEY='xpense_cfg_v6';
 function esc(s){return (s||'').replace(/[<>&"]/g,function(c){return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c];});}
+// A category/account name going into an inline onclick: escape for the JS
+// string literal first, then for the double-quoted HTML attribute around it.
+function jsq(s){return esc(String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'"));}
 function load(k,f){try{var v=JSON.parse(localStorage.getItem(k));return v==null?f:v;}catch(e){return f;}}
 function save(k,v,quiet){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){} if(!quiet)schedSync();}
 
@@ -429,6 +432,7 @@ function openSheet(kind){
   if(kind==='recent') body.innerHTML=recentHtml();
   else if(kind==='break') body.innerHTML=breakHtml();
   else if(kind==='day') body.innerHTML=dayHtml(dayKey);
+  else if(kind==='drill') body.innerHTML=drillHtml();
   else if(kind==='edit') body.innerHTML=editHtml(editId);
   else if(kind==='makan') body.innerHTML=makanHtml();
   else body.innerHTML=setHtml();
@@ -473,6 +477,29 @@ function delEntry(id){
 
 // Entries for one calendar day (tapped from the Insights heat calendar).
 function openDay(dk){ dayKey=dk; openSheet('day'); }
+
+/* Drill into any Insights line — a category, an account, or need/want —
+   and list this month's entries behind it. Each row opens for editing. */
+var drill=null;
+function openDrill(field,val){ drill={f:field,v:val}; openSheet('drill'); }
+function drillHtml(){
+  if(!drill) return '<div class="mini">—</div>';
+  var f=drill.f, v=drill.v;
+  var list=thisMonth().filter(function(e){return (e[f]||'')===v;})
+    .sort(function(a,b){return a.ts<b.ts?1:-1;});
+  var tot=list.reduce(function(s,e){return s+e.amt;},0);
+  var title=f==='need' ? (v==='need'?'🟢 Need (essential)':'🟠 Want (could cut)') : esc(v);
+  var rows=list.map(function(e){
+    var t=new Date(e.ts);
+    return '<div class="row rowc" onclick="openEdit(\''+e.id+'\')"><div class="l"><span class="e">'+e.e+'</span><div>'+
+      esc(e.note||e.cat)+
+      '<small>'+t.toLocaleDateString('en-GB',{day:'numeric',month:'short'})+
+      (f==='cat'?'':' · '+esc(e.cat))+' · '+esc(e.method)+' · '+(e.need==='need'?'Need':'Want')+'</small></div></div>'+
+      '<div class="l"><b class="num">RM '+fmt(e.amt)+'</b></div></div>';
+  }).join('') || '<div class="mini">Nothing logged here this month.</div>';
+  return '<h2>'+title+' <span>RM '+fmt(tot)+' · '+list.length+' log'+(list.length===1?'':'s')+'</span>'+
+    '<button class="x" onclick="openSheet(\'break\')">‹ Back</button></h2>'+rows;
+}
 function dayHtml(dk){
   var list=entries.filter(function(e){return entryDay(e)===dk;}).sort(function(a,b){return a.ts<b.ts?1:-1;});
   var tot=list.reduce(function(s,e){return s+e.amt;},0);
@@ -515,7 +542,50 @@ function editHtml(id){
     '<div class="bdh">Note</div>'+
     '<div class="setrow"><input id="edNote" value="'+esc(e.note||'')+'" placeholder="note (optional)"></div>'+
     '<button class="copybtn" onclick="saveEdit(\''+id+'\')">Save</button>'+
+    '<div class="bdh">Split into installments</div>'+
+    '<div class="setrow"><input id="edMonths" type="number" inputmode="numeric" min="2" max="60" placeholder="months · e.g. 12">'+
+    '<button class="copybtn" style="margin-top:0;width:auto;padding:10px 16px" onclick="splitInstallments(\''+id+'\')">Split</button></div>'+
+    '<div class="mini" style="text-align:left">Replaces this entry with one dated entry per month, same category and account, so each month carries its own share instead of one big hit. Uses the amount and date above.</div>'+
     '<div class="setrow"><button class="copybtn" style="margin-top:0;background:var(--card2);color:var(--blush)" onclick="delEntry(\''+id+'\')">Delete entry</button></div>';
+}
+/* Same day-of-month n months on, clamped to the month's last day so a
+   purchase on the 31st doesn't skid into the following month. */
+function addMonths(d,n){
+  var day=d.getDate(), x=new Date(d.getTime());
+  x.setDate(1); x.setMonth(x.getMonth()+n);
+  x.setDate(Math.min(day, new Date(x.getFullYear(),x.getMonth()+1,0).getDate()));
+  return x;
+}
+/* Turn one lump-sum entry into n monthly ones. Split in cents so the parts
+   always add back to the original — the last month absorbs the remainder. */
+function splitInstallments(id){
+  var e=entries.find(function(x){return x.id===id;});
+  if(!e) return;
+  var n=parseInt((document.getElementById('edMonths')||{}).value,10);
+  if(!(n>=2&&n<=60)){ toast('Enter 2–60 months'); return; }
+  var aEl=document.getElementById('edAmt'), amtV=aEl?parseFloat(aEl.value):e.amt;
+  if(!(amtV>0)) amtV=e.amt;
+  var wEl=document.getElementById('edWhen'), base=new Date(e.ts);
+  if(wEl&&wEl.value){ var nd=new Date(wEl.value); if(!isNaN(nd.getTime())) base=nd; }
+  var total=Math.round(amtV*100), per=Math.floor(total/n);
+  if(per<1){ toast('Too small to split'); return; }
+  var last=total-per*(n-1);
+  if(!confirm('Split RM '+fmt2(total/100)+' into '+n+' monthly entries?\n\n'+
+      (n-1)+' × RM '+fmt2(per/100)+(last!==per?'\n1 × RM '+fmt2(last/100):'')+
+      '\nFrom '+base.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})+
+      ' to '+addMonths(base,n-1).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}))) return;
+  var note=(e.note||'').trim(), rows=[];
+  for(var i=0;i<n;i++){
+    rows.push({id:genId(), amt:(i===n-1?last:per)/100, cat:e.cat, e:e.e, method:e.method,
+      need:e.need, note:(note?note+' ':'')+(i+1)+'/'+n, ts:addMonths(base,i).toISOString()});
+  }
+  entries.splice(entries.indexOf(e),1);
+  rows.forEach(function(r){entries.push(r);});
+  entries.sort(function(a,b){return a.ts<b.ts?-1:1;});
+  save(KEY,entries);
+  hideLast(); renderTotals(); renderQuick();
+  toast('Split into '+n+' monthly entries');
+  openSheet(editBack);
 }
 function wireEdit(id){
   var seg=document.getElementById('edNeed');
@@ -689,21 +759,21 @@ function breakHtml(){
       if(dp>=20) t=' <span class="up">▲'+dp+'%</span>';
       else if(dp<=-20) t=' <span class="dn">▼'+(-dp)+'%</span>';
     }
-    return '<div class="row"><div class="l">'+esc(k)+t+'</div><b class="num">RM '+fmt(gc[k])+'</b></div>';
+    return '<div class="row rowc" onclick="openDrill(\'cat\',\''+jsq(k)+'\')"><div class="l">'+esc(k)+t+'</div><b class="num">RM '+fmt(gc[k])+'</b></div>';
   }).join('')||'<div class="mini">—</div>';
   var gm={}; mo.forEach(function(e){gm[e.method]=(gm[e.method]||0)+e.amt;});
   var mRows=Object.keys(gm).sort(function(a,b){return gm[b]-gm[a];}).map(function(k){
-    return '<div class="row"><div class="l">'+esc(k)+'</div><b class="num">RM '+fmt(gm[k])+'</b></div>';
+    return '<div class="row rowc" onclick="openDrill(\'method\',\''+jsq(k)+'\')"><div class="l">'+esc(k)+'</div><b class="num">RM '+fmt(gm[k])+'</b></div>';
   }).join('')||'<div class="mini">—</div>';
 
   return '<h2>'+new Date(monthKey+'-01').toLocaleDateString('en-GB',{month:'long'})+
     ' <span>RM '+fmt(tot)+' · '+mo.length+' logs</span><button class="x" onclick="closeSheet()">✕</button></h2>'+
     pace+vs+
     '<div class="bdh">Daily heat · tap a day</div><div class="heat num">'+cells+'</div>'+
-    '<div class="row"><div class="l">🟢 Need (essential)'+(pPct!=null?'<small>'+nPct+'% of month · '+pName+' was '+pPct+'%</small>':'')+'</div><b class="num">RM '+fmt(need)+'</b></div>'+
-    '<div class="row"><div class="l">🟠 Want (could cut)</div><b class="num">RM '+fmt(want)+'</b></div>'+
-    '<div class="bdh">By category · ▲▼ vs 3-month average</div>'+catRows+
-    '<div class="bdh">By account · check vs your statements</div>'+mRows+
+    '<div class="row rowc" onclick="openDrill(\'need\',\'need\')"><div class="l">🟢 Need (essential)'+(pPct!=null?'<small>'+nPct+'% of month · '+pName+' was '+pPct+'%</small>':'')+'</div><b class="num">RM '+fmt(need)+'</b></div>'+
+    '<div class="row rowc" onclick="openDrill(\'need\',\'want\')"><div class="l">🟠 Want (could cut)</div><b class="num">RM '+fmt(want)+'</b></div>'+
+    '<div class="bdh">By category · tap to open · ▲▼ vs 3-month avg</div>'+catRows+
+    '<div class="bdh">By account · tap to open · check vs statements</div>'+mRows+
     '<button class="copybtn" onclick="copyMonth()">Copy month summary</button>'+
     '<div class="mini">Paste the total into Wealth&nbsp;OS → Lifestyle Budget.</div>';
 }
@@ -1026,6 +1096,7 @@ window.backupFile=backupFile;window.doImport=doImport;
 window.connectSync=connectSync;window.disconnectSync=disconnectSync;window.pullSync=pullSync;
 window.hideLast=hideLast;window.lastFlipNeed=lastFlipNeed;window.lastCycleMethod=lastCycleMethod;
 window.openEdit=openEdit;window.saveEdit=saveEdit;window.openDay=openDay;
+window.splitInstallments=splitInstallments;window.openDrill=openDrill;
 window.logMakan=logMakan;
 
 // Home-Screen web apps cache the HTML hard and won't show a new deploy on their
