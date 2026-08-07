@@ -574,10 +574,16 @@ function splitInstallments(id){
       (n-1)+' × RM '+fmt2(per/100)+(last!==per?'\n1 × RM '+fmt2(last/100):'')+
       '\nFrom '+base.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})+
       ' to '+addMonths(base,n-1).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}))) return;
-  var note=(e.note||'').trim(), rows=[];
+  /* Every part carries the same inst tag: which plan it belongs to, its
+     place in it, and what the original purchase cost. Wealth OS reassembles
+     the whole purchase from this — otherwise a RM4,000 buy split 12 ways
+     never clears its RM1,000 exceptional-expense threshold. */
+  var gid=genId(), note=(e.note||'').trim(), rows=[];
+  var inst={g:gid, n:n, tot:total/100, d:base.toISOString(), desc:note||e.cat};
   for(var i=0;i<n;i++){
     rows.push({id:genId(), amt:(i===n-1?last:per)/100, cat:e.cat, e:e.e, method:e.method,
-      need:e.need, note:(note?note+' ':'')+(i+1)+'/'+n, ts:addMonths(base,i).toISOString()});
+      need:e.need, note:(note?note+' ':'')+(i+1)+'/'+n, ts:addMonths(base,i).toISOString(),
+      inst:{g:inst.g, i:i+1, n:n, tot:inst.tot, d:inst.d, desc:inst.desc}});
   }
   entries.splice(entries.indexOf(e),1);
   rows.forEach(function(r){entries.push(r);});
@@ -1074,8 +1080,10 @@ function doImport(txt){
     var v=parseFloat(e.amt), ts=e.ts;
     if(!ts||isNaN(new Date(ts).getTime())||!(v>0))return;
     var k=ts+'|'+v; if(seen[k])return; seen[k]=1;
-    entries.push({id:genId(),amt:v,cat:e.cat||'Other',e:e.e||catE[e.cat]||'📌',method:e.method||'',
-      need:e.need==='need'?'need':'want',note:e.note||'',ts:ts});
+    var row={id:genId(),amt:v,cat:e.cat||'Other',e:e.e||catE[e.cat]||'📌',method:e.method||'',
+      need:e.need==='need'?'need':'want',note:e.note||'',ts:ts};
+    if(e.inst&&e.inst.g) row.inst=e.inst; // keep installment tags across a backup restore
+    entries.push(row);
     added++;
   });
   entries.sort(function(a,b){return a.ts<b.ts?-1:1;});
