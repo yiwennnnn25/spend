@@ -478,6 +478,21 @@ function delEntry(id){
 // Entries for one calendar day (tapped from the Insights heat calendar).
 function openDay(dk){ dayKey=dk; openSheet('day'); }
 
+function dayHtml(dk){
+  var list=entries.filter(function(e){return entryDay(e)===dk;}).sort(function(a,b){return a.ts<b.ts?1:-1;});
+  var tot=list.reduce(function(s,e){return s+e.amt;},0);
+  var d=new Date(dk+'T00:00:00');
+  var title=d.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});
+  var rows=list.map(function(e){
+    var t=new Date(e.ts);
+    return '<div class="row rowc" onclick="openEdit(\''+e.id+'\')"><div class="l"><span class="e">'+e.e+'</span><div>'+esc(e.cat)+(e.note?' · '+esc(e.note):'')+
+      '<small>'+t.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})+' · '+e.method+' · '+(e.need==='need'?'Need':'Want')+'</small></div></div>'+
+      '<div class="l"><b class="num">RM '+fmt(e.amt)+'</b></div></div>';
+  }).join('') || '<div class="mini">No spending logged on this day.</div>';
+  return '<h2>'+title+' <span>RM '+fmt(tot)+' · '+list.length+' log'+(list.length===1?'':'s')+'</span>'+
+    '<button class="x" onclick="openSheet(\'break\')">‹ Back</button></h2>'+rows;
+}
+
 /* Drill into any Insights line — a category, an account, or need/want —
    and list this month's entries behind it. Each row opens for editing. */
 var drill=null;
@@ -497,20 +512,6 @@ function drillHtml(){
       (f==='cat'?'':' · '+esc(e.cat))+' · '+esc(e.method)+' · '+(e.need==='need'?'Need':'Want')+'</small></div></div>'+
       '<div class="l"><b class="num">RM '+fmt(e.amt)+'</b></div></div>';
   }).join('') || '<div class="mini">Nothing logged here this month.</div>';
-  return '<h2>'+title+' <span>RM '+fmt(tot)+' · '+list.length+' log'+(list.length===1?'':'s')+'</span>'+
-    '<button class="x" onclick="openSheet(\'break\')">‹ Back</button></h2>'+rows;
-}
-function dayHtml(dk){
-  var list=entries.filter(function(e){return entryDay(e)===dk;}).sort(function(a,b){return a.ts<b.ts?1:-1;});
-  var tot=list.reduce(function(s,e){return s+e.amt;},0);
-  var d=new Date(dk+'T00:00:00');
-  var title=d.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});
-  var rows=list.map(function(e){
-    var t=new Date(e.ts);
-    return '<div class="row rowc" onclick="openEdit(\''+e.id+'\')"><div class="l"><span class="e">'+e.e+'</span><div>'+esc(e.cat)+(e.note?' · '+esc(e.note):'')+
-      '<small>'+t.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})+' · '+e.method+' · '+(e.need==='need'?'Need':'Want')+'</small></div></div>'+
-      '<div class="l"><b class="num">RM '+fmt(e.amt)+'</b></div></div>';
-  }).join('') || '<div class="mini">No spending logged on this day.</div>';
   return '<h2>'+title+' <span>RM '+fmt(tot)+' · '+list.length+' log'+(list.length===1?'':'s')+'</span>'+
     '<button class="x" onclick="openSheet(\'break\')">‹ Back</button></h2>'+rows;
 }
@@ -545,7 +546,7 @@ function editHtml(id){
     '<div class="bdh">Split into installments</div>'+
     '<div class="setrow"><input id="edMonths" type="number" inputmode="numeric" min="2" max="60" placeholder="months · e.g. 12">'+
     '<button class="copybtn" style="margin-top:0;width:auto;padding:10px 16px" onclick="splitInstallments(\''+id+'\')">Split</button></div>'+
-    '<div class="mini" style="text-align:left">Replaces this entry with one dated entry per month, same category and account, so each month carries its own share instead of one big hit. Uses the amount and date above.</div>'+
+    '<div class="mini" style="text-align:left">Replaces this entry with one dated entry per month, same category and account. Uses the amount and date above.</div>'+
     '<div class="setrow"><button class="copybtn" style="margin-top:0;background:var(--card2);color:var(--blush)" onclick="delEntry(\''+id+'\')">Delete entry</button></div>';
 }
 /* Same day-of-month n months on, clamped to the month's last day so a
@@ -579,11 +580,11 @@ function splitInstallments(id){
      the whole purchase from this — otherwise a RM4,000 buy split 12 ways
      never clears its RM1,000 exceptional-expense threshold. */
   var gid=genId(), note=(e.note||'').trim(), rows=[];
-  var inst={g:gid, n:n, tot:total/100, d:base.toISOString(), desc:note||e.cat};
+  var tot=total/100, firstTs=base.toISOString(), desc=note||e.cat;
   for(var i=0;i<n;i++){
     rows.push({id:genId(), amt:(i===n-1?last:per)/100, cat:e.cat, e:e.e, method:e.method,
       need:e.need, note:(note?note+' ':'')+(i+1)+'/'+n, ts:addMonths(base,i).toISOString(),
-      inst:{g:inst.g, i:i+1, n:n, tot:inst.tot, d:inst.d, desc:inst.desc}});
+      inst:{g:gid, i:i+1, n:n, tot:tot, d:firstTs, desc:desc}});
   }
   entries.splice(entries.indexOf(e),1);
   rows.forEach(function(r){entries.push(r);});
