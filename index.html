@@ -89,6 +89,7 @@
   .sheet h2{font-size:16px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;font-weight:700}
   .sheet h2 span{color:var(--ink3);font-size:13px;font-weight:500}
   .x{color:var(--ink3);font-size:22px;border:0;background:none;cursor:pointer;line-height:1}
+  .x.back{font-size:14px;font-weight:600} /* 22px is for the ✕ glyph; a word needs far less */
   .row{display:flex;justify-content:space-between;align-items:center;padding:11px 4px;border-bottom:1px solid var(--line);font-size:14px}
   .row.rowc{cursor:pointer}
   .row.rowc:active{background:var(--card2)}
@@ -183,22 +184,60 @@
 
 <script>
 "use strict";
-var APP_VERSION='2026-08-07a'; /*APPVER:2026-08-07a*/
+var APP_VERSION='2026-08-08a'; /*APPVER:2026-08-08a*/
 var DEFAULT_CATS = [
   {e:'🍽️',n:'Eating Out'},{e:'🛒',n:'Groceries'},{e:'🛍️',n:'Shopping'},
   {e:'📦',n:'Online'},{e:'🐾',n:'Gomi'},{e:'📌',n:'Other'},
   {e:'🛵',n:'GrabFood'},{e:'🧋',n:'Drinks'}
 ];
 var DEFAULT_METHODS = ['HLB','MB','TnG','Cash'];
-var KEY='xpense_entries_v1', CKEY='xpense_cfg_v6';
+var KEY='xpense_entries_v1', CKEY='xpense_cfg_v6', DKEY='xpense_deleted_v1';
 function esc(s){return (s||'').replace(/[<>&"]/g,function(c){return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c];});}
 // A category/account name going into an inline onclick: escape for the JS
 // string literal first, then for the double-quoted HTML attribute around it.
 function jsq(s){return esc(String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'"));}
 function load(k,f){try{var v=JSON.parse(localStorage.getItem(k));return v==null?f:v;}catch(e){return f;}}
-function save(k,v,quiet){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){} if(!quiet)schedSync();}
+/* A non-quiet save is a change you made; a quiet one is the sync or a
+   migration writing back. Only the former restamps settings, so a config
+   pulled from another device keeps the time it was actually edited. */
+function save(k,v,quiet){
+  if(!quiet && k===CKEY && v) v.u=Date.now();
+  try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}
+  if(!quiet)schedSync();
+}
 
 var entries = load(KEY, []);
+
+/* ---- Deletion tombstones ----------------------------------------------
+   Sync merges entries but has no way to express "this one is gone", so a
+   delete on one device used to be undone by the next pull from another.
+   Every removal now records the entry's key here; the list rides along in
+   the sync payload, and a pull deletes anything the other device buried
+   and refuses to re-add it. Pruned after 180 days — long past the point
+   where a stale device could still resurrect something. ------------------ */
+var TOMB_TTL = 180*864e5;
+var deleted = load(DKEY, []);
+function entryKey(e){ return e.ts+'|'+parseFloat(e.amt); } // same identity sync dedupes on
+function tombPrune(){
+  var cut=Date.now()-TOMB_TTL;
+  deleted=deleted.filter(function(d){ return d && d.k && (d.t||0)>cut; });
+}
+function tombstone(e){
+  if(!e||!e.ts) return;
+  var k=entryKey(e);
+  deleted=deleted.filter(function(d){ return d.k!==k && !(e.id&&d.id===e.id); });
+  deleted.push({k:k, id:e.id||null, t:Date.now()});
+  tombPrune(); save(DKEY,deleted,true);
+}
+// A remote entry is buried if either identity matches — id for anything
+// logged since ids existed, date+amount for the older rows.
+function isTombed(e,tombK,tombI){ return (entryKey(e) in tombK) || !!(e.id && (e.id in tombI)); }
+function untomb(k){ // an entry with this key exists again — let it live
+  var n=deleted.length;
+  deleted=deleted.filter(function(d){ return d.k!==k; });
+  if(deleted.length!==n) save(DKEY,deleted,true);
+}
+tombPrune();
 var MAKAN_KEY='xpense_makan_v1';
 var makanEntries = load(MAKAN_KEY, []);
 var cfg = load(CKEY, {cats:DEFAULT_CATS, methods:DEFAULT_METHODS, method:'TnG', need:'want', budget:0});
@@ -212,6 +251,20 @@ function genId(){return crypto.randomUUID?crypto.randomUUID():(Date.now()+'-'+Ma
   entries.forEach(function(e){ if(!e.id){ e.id=genId(); added=true; } });
   if(added) save(KEY,entries,true);
 })();
+function syncCatIcons(){
+  /* An entry's icon is only ever a copy of its category's. Importing on a
+     device that didn't know the category left a fallback 📌 baked into the
+     rows, so realign them with whatever the category says now. Runs again
+     after settings arrive from another device. */
+  var byName={}; cfg.cats.forEach(function(c){ byName[c.n]=c.e; });
+  var fixed=false;
+  entries.forEach(function(e){
+    var want=byName[e.cat];
+    if(want && e.e!==want){ e.e=want; fixed=true; }
+  });
+  if(fixed) save(KEY,entries,true);
+}
+syncCatIcons();
 
 var amt = '';
 var monthKey = ymKey(new Date());
@@ -352,7 +405,7 @@ function logExpense(cat,el){
   var useM=(!manualSel.method&&d.method)?d.method:cfg.method;
   var useN=(!manualSel.need&&d.need)?d.need:cfg.need;
   var firstToday = !entries.some(function(x){return entryDay(x)===todayKey();});
-  var entry={id:genId(), amt:v, cat:cat.n, e:cat.e, method:useM, need:useN, note:note, ts:new Date().toISOString()};
+  var entry={id:genId(), amt:v, cat:cat.n, e:cat.e, method:useM, need:useN, note:note, ts:new Date().toISOString(), u:Date.now()};
   entries.push(entry);
   save(KEY,entries);
   if(useM!==cfg.method||useN!==cfg.need){cfg.method=useM;cfg.need=useN;save(CKEY,cfg);renderMethods();renderNeed();}
@@ -367,7 +420,7 @@ function quickLog(it){
   var d=catDefault(it.cat)||{};
   var useM=(!manualSel.method&&d.method)?d.method:cfg.method;
   var firstToday = !entries.some(function(x){return entryDay(x)===todayKey();});
-  var entry={id:genId(), amt:it.amt, cat:it.cat, e:it.e, method:useM, need:it.need, note:'', ts:new Date().toISOString()};
+  var entry={id:genId(), amt:it.amt, cat:it.cat, e:it.e, method:useM, need:it.need, note:'', ts:new Date().toISOString(), u:Date.now()};
   entries.push(entry);
   save(KEY,entries);
   if(useM!==cfg.method){cfg.method=useM;save(CKEY,cfg);renderMethods();}
@@ -379,7 +432,7 @@ function quickLog(it){
 }
 function undoLast(){
   if(!entries.length){toast('Nothing to undo');return;}
-  var e=entries.pop(); save(KEY,entries); hideLast(); renderTotals(); renderQuick();
+  var e=entries.pop(); tombstone(e); save(KEY,entries); hideLast(); renderTotals(); renderQuick();
   toast('Removed RM '+fmt2(e.amt)+' · '+e.cat);
 }
 
@@ -472,7 +525,7 @@ function recentHtml(){
 }
 function delEntry(id){
   var i=entries.findIndex(function(e){return e.id===id;});
-  if(i>=0){entries.splice(i,1);save(KEY,entries);hideLast();renderTotals();renderQuick();openSheet(editBack);}
+  if(i>=0){tombstone(entries[i]);entries.splice(i,1);save(KEY,entries);hideLast();renderTotals();renderQuick();openSheet(editBack);}
 }
 
 // Entries for one calendar day (tapped from the Insights heat calendar).
@@ -490,7 +543,7 @@ function dayHtml(dk){
       '<div class="l"><b class="num">RM '+fmt(e.amt)+'</b></div></div>';
   }).join('') || '<div class="mini">No spending logged on this day.</div>';
   return '<h2>'+title+' <span>RM '+fmt(tot)+' · '+list.length+' log'+(list.length===1?'':'s')+'</span>'+
-    '<button class="x" onclick="openSheet(\'break\')">‹ Back</button></h2>'+rows;
+    '<button class="x back" onclick="openSheet(\'break\')">‹ Back</button></h2>'+rows;
 }
 
 /* Drill into any Insights line — a category, an account, or need/want —
@@ -513,7 +566,7 @@ function drillHtml(){
       '<div class="l"><b class="num">RM '+fmt(e.amt)+'</b></div></div>';
   }).join('') || '<div class="mini">Nothing logged here this month.</div>';
   return '<h2>'+title+' <span>RM '+fmt(tot)+' · '+list.length+' log'+(list.length===1?'':'s')+'</span>'+
-    '<button class="x" onclick="openSheet(\'break\')">‹ Back</button></h2>'+rows;
+    '<button class="x back" onclick="openSheet(\'break\')">‹ Back</button></h2>'+rows;
 }
 
 // ISO timestamp -> value for <input type="datetime-local"> in the phone's local time.
@@ -529,7 +582,7 @@ function editHtml(id){
   if(!e) return '<h2>Edit<button class="x" onclick="closeSheet()">✕</button></h2><div class="mini">Entry not found.</div>';
   var catOpts=cfg.cats.map(function(c){return '<option value="'+esc(c.n)+'"'+(c.n===e.cat?' selected':'')+'>'+c.e+' '+esc(c.n)+'</option>';}).join('');
   var mOpts=cfg.methods.map(function(m){return '<option value="'+esc(m)+'"'+(m===e.method?' selected':'')+'>'+esc(m)+'</option>';}).join('');
-  return '<h2>Edit<button class="x" onclick="openSheet(\''+editBack+'\')">‹ Back</button></h2>'+
+  return '<h2>Edit<button class="x back" onclick="openSheet(\''+editBack+'\')">‹ Back</button></h2>'+
     '<div class="bdh">Amount (RM)</div>'+
     '<div class="setrow"><input id="edAmt" type="number" inputmode="decimal" value="'+e.amt+'"></div>'+
     '<div class="bdh">Date &amp; time · edit to backlog</div>'+
@@ -583,11 +636,14 @@ function splitInstallments(id){
   var tot=total/100, firstTs=base.toISOString(), desc=note||e.cat;
   for(var i=0;i<n;i++){
     rows.push({id:genId(), amt:(i===n-1?last:per)/100, cat:e.cat, e:e.e, method:e.method,
-      need:e.need, note:(note?note+' ':'')+(i+1)+'/'+n, ts:addMonths(base,i).toISOString(),
+      need:e.need, note:(note?note+' ':'')+(i+1)+'/'+n, ts:addMonths(base,i).toISOString(), u:Date.now(),
       inst:{g:gid, i:i+1, n:n, tot:tot, d:firstTs, desc:desc}});
   }
+  /* The lump sum is gone everywhere, not just here — without this the other
+     device keeps it and syncs back both the original and the 12 parts. */
+  tombstone(e);
   entries.splice(entries.indexOf(e),1);
-  rows.forEach(function(r){entries.push(r);});
+  rows.forEach(function(r){untomb(entryKey(r));entries.push(r);});
   entries.sort(function(a,b){return a.ts<b.ts?-1:1;});
   save(KEY,entries);
   hideLast(); renderTotals(); renderQuick();
@@ -606,6 +662,7 @@ function saveEdit(id){
   if(!e) return;
   var v=parseFloat((document.getElementById('edAmt')||{}).value);
   if(!(v>0)){ toast('Enter a valid amount'); return; }
+  var oldKey=entryKey(e); // amount/date changes reissue the entry's identity
   var catName=(document.getElementById('edCat')||{}).value;
   var cat=cfg.cats.find(function(c){return c.n===catName;});
   e.amt=v;
@@ -616,6 +673,11 @@ function saveEdit(id){
   e.note=((document.getElementById('edNote')||{}).value||'').trim();
   var wEl=document.getElementById('edWhen');
   if(wEl&&wEl.value){var nd=new Date(wEl.value); if(!isNaN(nd.getTime())) e.ts=nd.toISOString();}
+  e.u=Date.now();
+  /* Bury the old identity so the pre-edit copy on another device is
+     replaced rather than surviving alongside the corrected one. */
+  var newKey=entryKey(e);
+  if(newKey!==oldKey){ tombstone({ts:oldKey.split('|')[0], amt:oldKey.split('|')[1]}); untomb(newKey); }
   entries.sort(function(a,b){return a.ts<b.ts?-1:1;}); // a backdated entry may need to move
   save(KEY,entries);
   renderTotals();renderQuick();
@@ -829,17 +891,23 @@ function setHtml(){
     '<div class="setrow"><button class="copybtn" style="margin-top:0" onclick="backupFile()">Backup file</button>'+
     '<button class="copybtn" style="margin-top:0;background:var(--card2);color:var(--ink)" onclick="document.getElementById(\'importFile\').click()">Import</button></div>'+
     '<input type="file" id="importFile" accept=".json,.csv,text/plain,application/json,text/csv" style="display:none">'+
+    '<div class="setrow"><button class="copybtn" style="margin-top:0;background:var(--card2);color:var(--blush)" onclick="document.getElementById(\'replaceFile\').click()">Replace all from file</button></div>'+
+    '<input type="file" id="replaceFile" accept=".json,.csv,text/plain,application/json,text/csv" style="display:none">'+
     '<div class="mini">All data is stored only on this phone — download a backup file now and then.<br>Import accepts a backup file or the exported CSV; duplicates are skipped.<br>Add to Home Screen for an app icon.</div>';
 }
 function wireSettings(){
   var b=document.getElementById('budgetInp');
   if(b) b.addEventListener('change',function(){cfg.budget=parseFloat(b.value)||0;save(CKEY,cfg);renderTotals();});
-  var f=document.getElementById('importFile');
-  if(f) f.addEventListener('change',function(){
-    if(!f.files||!f.files[0])return;
-    var r=new FileReader();
-    r.onload=function(){doImport(String(r.result||''));};
-    r.readAsText(f.files[0]);
+  [['importFile',false],['replaceFile',true]].forEach(function(p){
+    var f=document.getElementById(p[0]);
+    if(!f) return;
+    f.addEventListener('change',function(){
+      if(!f.files||!f.files[0])return;
+      var r=new FileReader();
+      r.onload=function(){doImport(String(r.result||''),p[1]);};
+      r.readAsText(f.files[0]);
+      f.value=''; // re-picking the same file must fire change again
+    });
   });
   document.querySelectorAll('#sheetBody input[data-t]').forEach(function(inp){
     inp.addEventListener('change',function(){
@@ -861,7 +929,11 @@ function exportAll(){
   else toast('No clipboard');
 }
 function backupFile(){
-  var blob=new Blob([JSON.stringify({entries:entries,cfg:cfg})],{type:'application/json'});
+  /* Carry the tombstones so a restore doesn't resurrect what you deleted,
+     and leave the GitHub token/passphrase out — this file gets AirDropped
+     and emailed around, and the connection is re-entered per device anyway. */
+  var c={};for(var k in cfg){if(k!=='ghToken'&&k!=='gistId'&&k!=='syncPass')c[k]=cfg[k];}
+  var blob=new Blob([JSON.stringify({entries:entries,cfg:c,del:deleted})],{type:'application/json'});
   var a=document.createElement('a');a.href=URL.createObjectURL(blob);
   a.download='spend-backup-'+todayKey()+'.json';
   document.body.appendChild(a);a.click();
@@ -890,7 +962,7 @@ function ghReq(method,url,body,cb){
 }
 function syncPayload(){
   var c={};for(var k in cfg){if(k!=='ghToken'&&k!=='gistId'&&k!=='syncPass')c[k]=cfg[k];}
-  return JSON.stringify({v:1,savedAt:new Date().toISOString(),entries:entries,cfg:c});
+  return JSON.stringify({v:1,savedAt:new Date().toISOString(),entries:entries,cfg:c,del:deleted});
 }
 /* passphrase encryption: AES-GCM, key from PBKDF2(passphrase) */
 function b64(buf){var s='';new Uint8Array(buf).forEach(function(x){s+=String.fromCharCode(x);});return btoa(s);}
@@ -1000,25 +1072,69 @@ function mergeRemote(txt,interactive){
 }
 function applyRemote(data,interactive){
   if(!data||!data.entries){pushSync(interactive);return;}
-  var localEmpty=entries.length===0;
-  var seen={};entries.forEach(function(e){seen[e.ts+'|'+parseFloat(e.amt)]=1;});
-  var added=0;
-  data.entries.forEach(function(e){
-    if(!e||!e.ts||!(parseFloat(e.amt)>0))return;
-    var k=e.ts+'|'+parseFloat(e.amt);if(seen[k])return;seen[k]=1;
-    if(!e.id)e.id=genId();
-    entries.push(e);added++;
+
+  /* Deletions travel as tombstones: adopt the other device's, drop anything
+     it buried, and don't re-add what this device already buried. */
+  var tombK={}, tombI={}, tombNew=false;
+  function noteTomb(d){
+    if(!d||!d.k) return false;
+    if(d.k in tombK) return false;
+    tombK[d.k]=d.t||0; if(d.id) tombI[d.id]=d.t||0;
+    return true;
+  }
+  deleted.forEach(noteTomb);
+  (data.del||[]).forEach(function(d){
+    if(noteTomb(d)){ deleted.push({k:d.k,id:d.id||null,t:d.t||Date.now()}); tombNew=true; }
   });
-  if(added){entries.sort(function(a,b){return a.ts<b.ts?-1:1;});save(KEY,entries,true);}
-  if(localEmpty&&data.cfg&&data.cfg.cats&&data.cfg.methods){
+  if(tombNew){ tombPrune(); save(DKEY,deleted,true); }
+  var before=entries.length;
+  entries=entries.filter(function(e){ return !isTombed(e,tombK,tombI); });
+  var removed=before-entries.length;
+
+  /* Match on the entry's own id, falling back to date+amount for rows that
+     predate ids (each device generated those separately, so the ids differ
+     for what is really the same purchase). Newer edit wins — that's what
+     lets a changed category or note reach the other device at all. */
+  var byId={}, byKey={};
+  entries.forEach(function(e,i){ if(e.id) byId[e.id]=i; byKey[entryKey(e)]=i; });
+  var added=0, updated=0;
+  data.entries.forEach(function(r){
+    if(!r||!r.ts||!(parseFloat(r.amt)>0))return;
+    if(isTombed(r,tombK,tombI))return;
+    var idx=(r.id&&byId[r.id]!=null)?byId[r.id]:byKey[entryKey(r)];
+    if(idx==null){
+      if(!r.id)r.id=genId();
+      byId[r.id]=entries.length; byKey[entryKey(r)]=entries.length;
+      entries.push(r); added++;
+    } else if((r.u||0)>(entries[idx].u||0)){
+      r.id=entries[idx].id||r.id||genId();  // keep the id this device already knows
+      entries[idx]=r; updated++;
+    }
+  });
+  if(added||removed||updated){entries.sort(function(a,b){return a.ts<b.ts?-1:1;});save(KEY,entries,true);}
+  /* Settings used to be adopted only by a device with no entries, which is
+     why a laptop that logged anything before connecting kept its factory
+     categories for good. Take whichever copy was edited more recently
+     instead — a device with nothing yet has no stamp, so it still adopts. */
+  var cfgNewer=data.cfg&&data.cfg.cats&&data.cfg.methods&&data.cfg.methods.length&&
+               (data.cfg.u||0)>(cfg.u||0);
+  if(cfgNewer){
     var tok=cfg.ghToken,gid=cfg.gistId,pw=cfg.syncPass;
     cfg=data.cfg;cfg.ghToken=tok;cfg.gistId=gid;cfg.syncPass=pw;
     if(cfg.methods.indexOf(cfg.method)<0)cfg.method=cfg.methods[0];
     save(CKEY,cfg,true);
     renderMethods();renderNeed();renderCats();
+    syncCatIcons();
   }
   renderTotals();renderQuick();
-  if(interactive)toast(added?('☁️ Restored '+added+' entr'+(added===1?'y':'ies')):'☁️ Connected — up to date');
+  if(interactive){
+    var bits=[];
+    if(added) bits.push('restored '+added+' entr'+(added===1?'y':'ies'));
+    if(updated) bits.push('updated '+updated);
+    if(removed) bits.push('removed '+removed+' deleted elsewhere');
+    if(cfgNewer) bits.push('settings updated');
+    toast(bits.length?('☁️ '+bits.join(' · ')):'☁️ Connected — up to date');
+  }
   pushSync(); // push the merged state back up
 }
 function connectSync(){
@@ -1063,26 +1179,53 @@ function parseCsv(txt){
   }
   return out;
 }
-function doImport(txt){
+function doImport(txt,replace){
   txt=(txt||'').trim();
-  var incoming=null, newCfg=null;
+  var incoming=null, newCfg=null, newDel=null;
   if(txt[0]==='{'||txt[0]==='['){
-    try{var j=JSON.parse(txt);incoming=Array.isArray(j)?j:j.entries;if(j.cfg)newCfg=j.cfg;}catch(err){}
+    try{var j=JSON.parse(txt);incoming=Array.isArray(j)?j:j.entries;if(j.cfg)newCfg=j.cfg;if(j.del)newDel=j.del;}catch(err){}
   } else if(txt){
     incoming=parseCsv(txt);
   }
   if(!incoming||!incoming.length){toast('Nothing to import');return;}
   var catE={};cfg.cats.forEach(function(c){catE[c.n]=c.e;});
   if(newCfg&&newCfg.cats)newCfg.cats.forEach(function(c){catE[c.n]=c.e;});
+
+  /* Replace mode: the file is the truth, not a contribution to merge into
+     what's here. The cloud already carries entries between devices, so the
+     job left for a file is making a device that drifted match exactly —
+     which a merge can never do, since a merge only ever adds. */
+  if(replace){
+    if(!confirm('Replace everything on this device?\n\n'+
+        entries.length+' entr'+(entries.length===1?'y':'ies')+' here will be discarded and replaced with '+
+        incoming.length+' from the file.\n\nThe cloud copy updates to match on the next sync.')) return;
+    entries=[];
+    if(newDel){ deleted=newDel.slice(); tombPrune(); save(DKEY,deleted,true); }
+  }
+
+  /* A backup carries what the other device deleted, so importing one can
+     finally remove — not just add. This is what lets a device that fell
+     behind catch up completely instead of hoarding entries forever. */
+  var tomb={}; deleted.forEach(function(d){ tomb[d.k]=d.t||0; });
+  var tombNew=false;
+  (newDel||[]).forEach(function(d){
+    if(!d||!d.k) return;
+    if(tomb[d.k]==null){ deleted.push({k:d.k,t:d.t||Date.now()}); tomb[d.k]=d.t||Date.now(); tombNew=true; }
+  });
+  if(tombNew){ tombPrune(); save(DKEY,deleted,true); }
+  var beforeN=entries.length;
+  entries=entries.filter(function(e){ return !(entryKey(e) in tomb); });
+  var removed=beforeN-entries.length;
+
   var seen={};entries.forEach(function(e){seen[e.ts+'|'+e.amt]=1;});
   var added=0;
   incoming.forEach(function(e){
     if(!e)return;
     var v=parseFloat(e.amt), ts=e.ts;
     if(!ts||isNaN(new Date(ts).getTime())||!(v>0))return;
-    var k=ts+'|'+v; if(seen[k])return; seen[k]=1;
-    var row={id:genId(),amt:v,cat:e.cat||'Other',e:e.e||catE[e.cat]||'📌',method:e.method||'',
-      need:e.need==='need'?'need':'want',note:e.note||'',ts:ts};
+    var k=ts+'|'+v; if(seen[k]||(k in tomb))return; seen[k]=1;
+    var row={id:e.id||genId(),amt:v,cat:e.cat||'Other',e:e.e||catE[e.cat]||'📌',method:e.method||'',
+      need:e.need==='need'?'need':'want',note:e.note||'',ts:ts,u:e.u||Date.now()};
     if(e.inst&&e.inst.g) row.inst=e.inst; // keep installment tags across a backup restore
     entries.push(row);
     added++;
@@ -1090,12 +1233,21 @@ function doImport(txt){
   entries.sort(function(a,b){return a.ts<b.ts?-1:1;});
   save(KEY,entries);
   if(newCfg&&newCfg.cats&&newCfg.methods&&newCfg.methods.length){
+    /* Adopt the settings but keep this device's own cloud connection —
+       a backup from another phone must not unplug the one you're holding. */
+    var tok=cfg.ghToken,gid=cfg.gistId,pw=cfg.syncPass;
     cfg=newCfg;
+    cfg.ghToken=newCfg.ghToken||tok; cfg.gistId=newCfg.gistId||gid; cfg.syncPass=newCfg.syncPass||pw;
     if(cfg.methods.indexOf(cfg.method)<0)cfg.method=cfg.methods[0];
     save(CKEY,cfg);renderMethods();renderNeed();renderCats();
   }
   renderTotals();renderQuick();closeSheet();
-  toast(added?('Imported '+added+' entr'+(added===1?'y':'ies')):'No new entries — all duplicates');
+  if(replace){ toast('Replaced — '+added+' entr'+(added===1?'y':'ies')+' now on this device'); return; }
+  var bits=[];
+  if(added) bits.push('imported '+added+' entr'+(added===1?'y':'ies'));
+  if(removed) bits.push('removed '+removed+' deleted elsewhere');
+  toast(bits.length?(bits.join(' · ').replace(/^./,function(c){return c.toUpperCase();}))
+                   :'No new entries — all duplicates');
 }
 
 window.openSheet=openSheet;window.closeSheet=closeSheet;window.undoLast=undoLast;
