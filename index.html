@@ -334,7 +334,7 @@
 
 <script>
 "use strict";
-var APP_VERSION='2026-10-05a'; /*APPVER:2026-10-05a*/
+var APP_VERSION='2026-10-06c'; /*APPVER:2026-10-06c*/
 /* Categories are groups with optional sub-categories. An entry stores the
    group in `cat` (so every total, and the suite reading the gist, still
    rolls up by group) and the sub in `sub`. A group with no subs logs
@@ -854,6 +854,7 @@ function openSheet(kind){
   else if(kind==='edit') body.innerHTML=editHtml(editId);
   else if(kind==='makan') body.innerHTML=makanHtml();
   else if(kind==='refile') body.innerHTML=refileHtml();
+  else if(kind==='hist') body.innerHTML=histHtml();
   else body.innerHTML=setHtml();
   currentSheet=kind;
   document.getElementById('sheet').classList.add('open');
@@ -1536,12 +1537,19 @@ function setHtml(){
     (cfg.ghToken
       ? '<div class="mini" style="text-align:left;margin:4px 0 0">☁️ '+syncStatus()+' · auto-backs up after every change</div>'+
         '<div class="setrow"><button class="copybtn" style="margin-top:0" onclick="pullSync(true)">Sync now</button>'+
-        '<button class="copybtn" style="margin-top:0;background:var(--card2);color:var(--ink)" onclick="disconnectSync()">Disconnect</button></div>'
+        '<button class="copybtn" style="margin-top:0;background:var(--card2);color:var(--ink)" onclick="disconnectSync()">Disconnect</button></div>'+
+        '<div class="setrow"><button class="copybtn" style="margin-top:0;background:var(--card2);color:var(--ink)" onclick="histLoad()">🕘 Restore from cloud history</button></div>'
       : '<div class="setrow"><input id="ghTok" type="password" placeholder="Paste GitHub token (gist scope)" autocomplete="off"></div>'+
         '<div class="setrow"><input id="ghPass" type="password" placeholder="Passphrase (optional — encrypts cloud copy)" autocomplete="off"></div>'+
         '<div class="setrow"><button class="copybtn" style="margin-top:0" onclick="connectSync()">Connect</button></div>'+
         '<div class="mini" style="text-align:left">github.com → Settings → Developer settings → Personal access tokens (classic) → Generate, tick only <b>gist</b>. Data auto-backs up to a private Gist; paste the same token (and passphrase) on any device to restore. Keep both in your password manager / Notes — a lost passphrase makes the cloud copy unreadable.</div>')+
     '<div class="bdh">Data</div>'+
+    (function(){ // each browser/phone keeps its own copy — say which one this is holding
+      var now=Date.now(), past=entries.filter(function(e){return new Date(e.ts).getTime()<=now;});
+      var last=past.length?new Date(past[past.length-1].ts).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):'—';
+      return '<div class="mini" style="text-align:left;margin:2px 0 6px">On this device: <b>'+entries.length+' entries</b> · latest <b>'+last+'</b>'+
+        (cfg.ghToken?'':' · not synced — this copy is only here')+'</div>';
+    })()+
     '<div class="setrow"><button class="copybtn" style="margin-top:0;background:var(--card2);color:var(--ink)" onclick="exportAll()">Export all (CSV)</button></div>'+
     '<div class="setrow"><button class="copybtn" style="margin-top:0" onclick="backupFile()">Backup file</button>'+
     '<button class="copybtn" style="margin-top:0;background:var(--card2);color:var(--ink)" onclick="document.getElementById(\'importFile\').click()">Import</button></div>'+
@@ -1702,8 +1710,13 @@ function exportAll(){
   function q(s){return '"'+String(s==null?'':s).replace(/"/g,'""')+'"';}
   var csv='date,amount,category,account,need_or_want,note,subcategory\n'+entries.map(function(e){
     return e.ts+','+e.amt+','+q(e.cat)+','+q(e.method)+','+e.need+','+q(e.note||'')+','+q(e.sub||'');}).join('\n');
-  if(navigator.clipboard) navigator.clipboard.writeText(csv).then(function(){toast('CSV copied');});
-  else toast('No clipboard');
+  // a real file, like Backup file — a silent clipboard copy looked like nothing happened
+  var blob=new Blob([csv],{type:'text/csv'});
+  var a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download='spend-'+todayKey()+'.csv';
+  document.body.appendChild(a);a.click();
+  setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},500);
+  toast('Downloaded spend-'+todayKey()+'.csv · '+entries.length+' entries');
 }
 function backupFile(){
   /* Carry the tombstones so a restore doesn't resurrect what you deleted,
@@ -1916,6 +1929,105 @@ function applyRemote(data,interactive){
   }
   pushSync(); // push the merged state back up
 }
+/* ---- Restore from cloud history ---------------------------------------
+   GitHub keeps every version of the synced gist. If entries go missing on
+   this phone (a bad import, a storage wipe that synced), pick a day from
+   before it happened and add back whatever that version has that this
+   phone doesn't. It only ever adds — nothing here is removed — and it
+   overrides the delete-markers for exactly those entries, since bringing
+   them back is the point. -------------------------------------------- */
+var hist=null;
+function histLoad(){
+  if(!cfg.ghToken||!cfg.gistId){ toast('Connect cloud sync first'); return; }
+  hist={loading:true,days:[],sel:null}; openSheet('hist');
+  var all=[], cut=Date.now()-60*864e5;
+  (function page(n){
+    ghReq('GET','https://api.github.com/gists/'+cfg.gistId+'/commits?per_page=100&page='+n,null,function(err,list){
+      if(err){ hist.loading=false; hist.err='Couldn\'t reach GitHub — '+err.message; if(currentSheet==='hist') openSheet('hist'); return; }
+      all=all.concat(list||[]);
+      var oldest=all.length?new Date(all[all.length-1].committed_at).getTime():0;
+      if((list||[]).length===100&&n<20&&oldest>cut) return page(n+1);
+      var byDay={};
+      all.forEach(function(c){
+        var k=dKey(new Date(c.committed_at));
+        if(!byDay[k]) byDay[k]={day:k,version:c.version,at:c.committed_at,n:0};
+        byDay[k].n++;
+      });
+      hist.days=Object.keys(byDay).sort().reverse().map(function(k){return byDay[k];});
+      hist.loading=false;
+      if(currentSheet==='hist') openSheet('hist');
+    });
+  })(1);
+}
+function histOpen(version){
+  hist.sel={version:version,loading:true}; openSheet('hist');
+  ghReq('GET','https://api.github.com/gists/'+cfg.gistId+'/'+version,null,function(err,j){
+    if(err){ hist.sel.err=err.message; hist.sel.loading=false; openSheet('hist'); return; }
+    var f=j.files&&j.files[GIST_FILE];
+    if(!f){ hist.sel.err='No Spend data in that version'; hist.sel.loading=false; openSheet('hist'); return; }
+    var got=function(txt){
+      var data=null; try{data=JSON.parse(txt);}catch(e){}
+      var fin=function(d){
+        if(!d||!d.entries){ hist.sel.err='Couldn\'t read that version'; hist.sel.loading=false; openSheet('hist'); return; }
+        var byId={}, byKey={};
+        entries.forEach(function(e){ if(e.id) byId[e.id]=1; byKey[entryKey(e)]=1; });
+        var missing=d.entries.filter(function(r){ return r&&r.ts&&parseFloat(r.amt)>0&&!(r.id&&byId[r.id])&&!byKey[entryKey(r)]; });
+        var months={}; d.entries.forEach(function(r){ var k=entryMonth(r); months[k]=(months[k]||0)+1; });
+        hist.sel={version:version,loading:false,total:d.entries.length,missing:missing,months:months};
+        openSheet('hist');
+      };
+      if(data&&data.enc){
+        if(!cfg.syncPass){ hist.sel.err='That version is encrypted — reconnect with your passphrase'; hist.sel.loading=false; openSheet('hist'); return; }
+        decryptPayload(data,cfg.syncPass).then(function(pt){ var d=null; try{d=JSON.parse(pt);}catch(e){} fin(d); },
+          function(){ hist.sel.err='Passphrase doesn\'t open that version'; hist.sel.loading=false; openSheet('hist'); });
+      } else fin(data);
+    };
+    if(f.truncated) fetch(f.raw_url).then(function(r){return r.text();}).then(got,function(e){ hist.sel.err=e.message; hist.sel.loading=false; openSheet('hist'); });
+    else got(f.content);
+  });
+}
+function histRestore(){
+  var m=hist&&hist.sel&&hist.sel.missing; if(!m||!m.length) return;
+  if(!confirm('Add back '+m.length+' entr'+(m.length===1?'y':'ies')+' from that version?\n\nNothing on this phone is removed.')) return;
+  var ids={}; m.forEach(function(r){ if(r.id) ids[r.id]=1; });
+  var keys={}; m.forEach(function(r){ keys[entryKey(r)]=1; });
+  deleted=deleted.filter(function(d){ return !(d.k in keys)&&!(d.id&&ids[d.id]); });
+  save(DKEY,deleted,true);
+  m.forEach(function(r){ var x=JSON.parse(JSON.stringify(r)); if(!x.id) x.id=genId(); x.u=Date.now(); entries.push(x); });
+  entries.sort(function(a,b){return a.ts<b.ts?-1:1;});
+  migrateCats(); syncCatIcons();
+  save(KEY,entries); // pushes, so the cloud copy has them again too
+  renderTotals(); renderCats();
+  toast('Restored '+m.length+' entr'+(m.length===1?'y':'ies'));
+  histOpen(hist.sel.version);
+}
+function histHtml(){
+  var h='<h2>Cloud history<button class="x back" onclick="openSheet(\'set\')">‹ Back</button></h2>'+
+    '<div class="mini" style="text-align:left;margin:0 0 8px">Every sync is kept. Pick a day from <b>before</b> things went missing — you\'ll see what it has, then add back only what this phone is missing. Nothing gets deleted.</div>';
+  if(!hist||hist.loading) return h+'<div class="mini">Loading versions…</div>';
+  if(hist.err) return h+'<div class="mini">'+esc(hist.err)+'</div>';
+  if(hist.sel){
+    var s=hist.sel;
+    h+='<div class="ihero" style="text-align:left">';
+    if(s.loading) h+='<div class="iline">Opening that version…</div>';
+    else if(s.err) h+='<div class="iline">'+esc(s.err)+'</div>';
+    else{
+      var mk=Object.keys(s.months).filter(function(k){return k<=monthKey;}).sort().reverse().slice(0,4).map(function(k){return new Date(k+'-01T00:00:00').toLocaleDateString('en-GB',{month:'short'})+' '+s.months[k];}).join(' · ');
+      h+='<div class="iline"><b>'+s.total+' entries</b> in that version · '+mk+'</div>'+
+        (s.missing.length?'<div class="iline" style="margin-top:6px"><b>'+s.missing.length+'</b> of them are missing on this phone</div>'+
+          '<button class="copybtn" onclick="histRestore()">Add back '+s.missing.length+' entr'+(s.missing.length===1?'y':'ies')+'</button>'
+          :'<div class="iline" style="margin-top:6px">This phone already has everything in it ✓</div>');
+    }
+    h+='</div>';
+  }
+  return h+'<div class="bdh">Saved versions · newest first</div>'+(hist.days.map(function(d){
+    var t=new Date(d.at);
+    return '<div class="row rowc'+(hist.sel&&hist.sel.version===d.version?' on':'')+'" onclick="histOpen(\''+d.version+'\')"><div class="l">'+
+      t.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'})+
+      '<small style="margin-left:6px">last save '+t.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})+' · '+d.n+' sync'+(d.n===1?'':'s')+'</small></div><b>›</b></div>';
+  }).join('')||'<div class="mini">No versions found.</div>');
+}
+window.histLoad=histLoad;window.histOpen=histOpen;window.histRestore=histRestore;
 function connectSync(){
   var inp=document.getElementById('ghTok');
   var tok=(inp&&inp.value||'').trim();
