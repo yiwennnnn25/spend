@@ -201,13 +201,13 @@
   .tcol{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;cursor:pointer;min-width:0}
   .tcol:active{opacity:.6}
   .tval{font-size:9px;color:var(--ink2);font-weight:700;margin-bottom:3px;white-space:nowrap}
-  .tstack{width:100%;max-width:22px;display:flex;flex-direction:column;border-radius:6px 6px 3px 3px;overflow:hidden;min-height:2px;background:var(--card2)}
+  .tstack{width:100%;max-width:30px;display:flex;flex-direction:column;border-radius:6px 6px 3px 3px;overflow:hidden;min-height:2px;background:var(--card2)}
   .tstack i{display:block;width:100%}
   .tstack i.life,.tleg i.life{background:linear-gradient(0deg,#c3b1f3,#e9a9d9)}
   .tstack i.one,.tleg i.one{background:#f8dc84}
   .tleg i.lb{height:0;border-top:2px dashed #e39ab4;border-radius:0;width:12px} .tleg i.la{height:0;border-top:2px dashed #b9a3e6;border-radius:0;width:12px}
   .tcol.cur .tstack{opacity:.55}
-  .tm{font-size:10px;color:var(--ink3);font-weight:700;margin-top:4px;height:12px}
+  .tm{font-size:10px;color:var(--ink3);font-weight:700;margin-top:4px;min-height:12px;text-align:center;line-height:1.15}
   .tline{position:absolute;left:8px;right:8px;border-top:1.5px dashed;pointer-events:none}
   .tline span{position:absolute;right:0;top:-14px;font-size:9px;font-weight:700;background:var(--card);padding:0 3px}
   .tline.bud{border-color:#e39ab4} .tline.bud span{color:#d07a9c}
@@ -225,6 +225,24 @@
   .spark i{flex:1;background:#d9c6f1;border-radius:3px 3px 1px 1px}
   .spark i.cur{background:var(--grad)}
   .gcur{font-size:13px;min-width:58px;text-align:right;white-space:nowrap}
+  .verdict{background:linear-gradient(160deg,#fbeef6,#f1e4fa);border:1px solid #ead3ea;border-radius:16px;padding:14px 14px 12px}
+  .vhead{font-family:Georgia,'Times New Roman',serif;font-size:21px;line-height:1.25;color:var(--ink)}
+  .vhead b{font-weight:700} .vhead b.up,.vpace b.up{color:var(--blush)} .vhead b.dn,.vpace b.dn{color:var(--need)}
+  .vsub{font-size:12.5px;color:var(--ink2);margin-top:5px}
+  .vpace{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 8px;margin-top:10px;padding-top:10px;border-top:1px solid #ead3ea}
+  .vpace span{font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--lav);font-weight:700}
+  .vpace>b{font-size:17px;color:var(--ink)} .vpace small{flex-basis:100%;font-size:12px;color:var(--ink2)}
+  .tch{font-size:9px;font-weight:700;margin-bottom:1px} .tch.up{color:var(--blush)} .tch.dn{color:var(--need)}
+  .tghost{width:100%;max-width:30px;border:1.5px dashed #c9b3e8;border-radius:7px 7px 3px 3px;display:flex;align-items:flex-end;overflow:hidden}
+  .tleg i.lg{background:none;border:1.5px dashed #c9b3e8;box-sizing:border-box} .tm b{color:var(--ink)}
+  .tghost i{display:block;width:100%;background:linear-gradient(0deg,#c3b1f3,#e9a9d9)}
+  .mrow{display:flex;align-items:center;gap:10px;padding:9px 2px;border-bottom:1px solid var(--line);cursor:pointer}
+  .mrow:active{background:var(--card2)} .mrow .ce{font-size:20px;width:26px;text-align:center}
+  .dbar{width:76px;height:8px;position:relative;background:var(--card2);border-radius:4px;flex-shrink:0}
+  .dbar:after{content:'';position:absolute;left:50%;top:-3px;bottom:-3px;width:1.5px;background:var(--ink3)}
+  .dbar i{position:absolute;top:0;bottom:0;border-radius:4px} .dbar i.up{left:50%;background:#efa3b9} .dbar i.dn{right:50%;background:#9fd0b6}
+  .mdel{font-size:13px;min-width:52px;text-align:right} .mdel.up{color:var(--blush)} .mdel.dn{color:var(--need)}
+  .bm{display:inline-block;width:34px;font-weight:700;color:var(--ink)}
   .nrow{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;text-align:center;margin-top:6px}
   .nb{height:56px;background:var(--card2);border-radius:8px;display:flex;align-items:flex-end;overflow:hidden}
   .nb i{display:block;width:100%;background:#9fd0b6}
@@ -334,7 +352,7 @@
 
 <script>
 "use strict";
-var APP_VERSION='2026-10-06d'; /*APPVER:2026-10-06d*/
+var APP_VERSION='2026-10-06e'; /*APPVER:2026-10-06e*/
 /* Categories are groups with optional sub-categories. An entry stores the
    group in `cat` (so every total, and the suite reading the gist, still
    rolls up by group) and the sub in `sub`. A group with no subs logs
@@ -1252,78 +1270,107 @@ function vsUsual(v,usual,inProgress,day,dim){
   if(dp<=-20) return '<span class="ichip dn">▼'+(-dp)+'%</span>';
   return '';
 }
+/* Everyday = what her month normally costs: under RM 1,000 and not an
+   installment part (Wealth OS reassembles those into the whole purchase,
+   so a RM 350/mo laser plan isn't lifestyle there either). The trend is
+   read on everyday only; one-offs and installments are listed, not stacked,
+   so one big buy can't hide which way the ordinary months are going. */
+function isEveryday(e){ return e.amt<ONE_OFF && !e.inst; }
 function trendHtml(){
   function sum(a,e){return a+e.amt;}
-  var now=new Date(), months=[];
+  function avgOf(a){ return a.length?a.reduce(function(s,v){return s+v;},0)/a.length:0; }
+  var now=new Date(), day=now.getDate(), dim=new Date(now.getFullYear(),now.getMonth()+1,0).getDate(), months=[];
   for(var i=11;i>=0;i--){ var d=new Date(now.getFullYear(),now.getMonth()-i,1); months.push({k:ymKey(d),d:d}); }
-  var firstK=entries.reduce(function(m,e){var k=entryMonth(e);return (!m||k<m)?k:m;},null)||monthKey;
+  var past=entries.filter(function(e){return new Date(e.ts).getTime()<=now.getTime();});
+  var firstK=past.reduce(function(m,e){var k=entryMonth(e);return (!m||k<m)?k:m;},null)||monthKey;
   months=months.filter(function(m){return m.k>=firstK;});
   months.forEach(function(m){
-    var mo=monthOf(m.k);
-    m.life=mo.filter(function(e){return e.amt<ONE_OFF;}).reduce(sum,0);
-    m.one=mo.filter(function(e){return e.amt>=ONE_OFF;}).reduce(sum,0);
-    m.tot=m.life+m.one; m.need=mo.filter(function(e){return e.need==='need';}).reduce(sum,0);
+    var mo=monthOf(m.k), ev=mo.filter(isEveryday), mdim=new Date(m.d.getFullYear(),m.d.getMonth()+1,0).getDate();
+    m.life=ev.reduce(sum,0);
+    m.toDay=ev.filter(function(e){return +entryDay(e).slice(8,10)<=Math.min(day,mdim);}).reduce(sum,0);
+    m.big=mo.filter(function(e){return !isEveryday(e);});
+    m.tot=mo.reduce(sum,0); m.need=mo.filter(function(e){return e.need==='need';}).reduce(sum,0);
     m.cur=m.k===monthKey;
   });
-  var closed=months.filter(function(m){return !m.cur;}), last6=closed.slice(-6);
-  var avg6=last6.length?last6.reduce(function(a,m){return a+m.life;},0)/last6.length:0;
-  var yr=String(now.getFullYear()), ytd=entries.filter(function(e){return entryMonth(e).slice(0,4)===yr&&entryMonth(e)<=monthKey;});
-  var ytdTot=ytd.reduce(sum,0);
-  var hi=closed.slice().sort(function(a,b){return b.tot-a.tot;})[0];
-  function mShort(m){return m.d.toLocaleDateString('en-GB',{month:'short'});}
+  function mName(m,long){return m.d.toLocaleDateString('en-GB',{month:long?'long':'short'});}
+  var closed=months.filter(function(m){return !m.cur;}), cur=months.filter(function(m){return m.cur;})[0];
+  var last=closed[closed.length-1], before=closed.slice(-7,-1);
+  var usual=avgOf(closed.slice(-6).map(function(m){return m.life;}));
 
-  var kpis='<div class="kpis">'+
-    '<div class="kpi"><small>Usual month</small><b class="num">RM '+fmt(avg6)+'</b><span>'+(last6.length?'everyday · '+last6.length+'-mo avg':'not enough yet')+'</span></div>'+
-    '<div class="kpi"><small>'+yr+' so far</small><b class="num">RM '+fmt(ytdTot)+'</b><span>'+ytd.length+' logs</span></div>'+
-    '<div class="kpi"><small>Highest</small><b class="num">'+(hi?'RM '+fmt(hi.tot):'—')+'</b><span>'+(hi?mShort(hi)+' '+hi.d.getFullYear():'')+'</span></div>'+
-  '</div>';
+  /* The verdict, in words. Last full month against the months before it
+     (not an average that already contains it), then this month against
+     what she has usually spent by the same day — fair on day 6, no guessing. */
+  var head, sub='';
+  if(!last||!before.length){
+    head='Not enough full months yet to call a trend.';
+  } else {
+    var base=avgOf(before.map(function(m){return m.life;})), dp=base?Math.round((last.life-base)/base*100):0;
+    var word=dp>=8?'<b class="up">up '+dp+'%</b>':dp<=-8?'<b class="dn">down '+(-dp)+'%</b>':'<b>steady</b>';
+    head='Everyday spending is '+word+'.';
+    sub=mName(last,true)+' RM '+fmt(last.life)+' vs RM '+fmt(base)+' a month before'+(before.length>1?' ('+before.length+'-mo avg)':'')+'.';
+  }
+  var pace='';
+  if(cur&&closed.length){
+    var by=avgOf(closed.slice(-6).map(function(m){return m.toDay;})), pd=by?Math.round((cur.life-by)/by*100):0;
+    var pw=pd>=15?'<b class="up">ahead of usual</b>':pd<=-15?'<b class="dn">under usual</b>':'<b>on track</b>';
+    pace='<div class="vpace"><span>'+mName(cur,true)+' everyday so far</span><b class="num">RM '+fmt(cur.life)+'</b>'+
+      '<small>usually RM '+fmt(by)+' by day '+day+' · '+pw+'</small></div>';
+  }
+  var verdict='<div class="verdict"><div class="vhead">'+head+'</div>'+(sub?'<div class="vsub">'+sub+'</div>':'')+pace+'</div>';
 
-  /* 12 months of bars; every bar says its amount; tap one to open that month */
-  var budget=cfg.budget||0, max=Math.max(budget,avg6,1);
-  months.forEach(function(m){ if(m.tot>max) max=m.tot; });
-  var H=150;
-  var bars=months.map(function(m){
-    var lh=m.life/max*H, oh=m.one/max*H;
-    return '<div class="tcol'+(m.cur?' cur':'')+'" onclick="insGo(\'month\',\''+m.k+'\')">'+
-      '<span class="tval num">'+(m.tot?(m.tot>=1000?(m.tot/1000).toFixed(1)+'k':fmt(m.tot)):'')+'</span>'+
-      '<div class="tstack" style="height:'+(lh+oh).toFixed(1)+'px">'+
-        (oh?'<i class="one" style="height:'+oh.toFixed(1)+'px"></i>':'')+
-        '<i class="life" style="height:'+lh.toFixed(1)+'px"></i></div>'+
-      '<span class="tm">'+mShort(m).slice(0,1)+'</span></div>';
+  /* Everyday bars only, with full month names; this month shows what's
+     spent so far inside a dashed outline of the usual month. */
+  var max=Math.max(usual,1); months.forEach(function(m){ if(m.life>max) max=m.life; });
+  var H=140;
+  var bars=months.map(function(m,i){
+    var h=m.life/max*H, prev=i?months[i-1]:null, ch='';
+    if(prev&&!m.cur&&prev.life>0){ var c=Math.round((m.life-prev.life)/prev.life*100); if(Math.abs(c)>=8) ch='<span class="tch '+(c>0?'up':'dn')+'">'+(c>0?'▲':'▼')+Math.abs(c)+'%</span>'; }
+    return '<div class="tcol'+(m.cur?' cur':'')+'" onclick="insGo(\'month\',\''+m.k+'\')">'+ch+
+      '<span class="tval num">'+(m.cur?'':m.life?(m.life>=1000?(m.life/1000).toFixed(1)+'k':fmt(m.life)):'–')+'</span>'+
+      (m.cur&&usual?'<div class="tghost" style="height:'+(usual/max*H).toFixed(1)+'px"><i style="height:'+Math.min(h,usual/max*H).toFixed(1)+'px"></i></div>'
+        :'<div class="tstack" style="height:'+h.toFixed(1)+'px"><i class="life" style="height:100%"></i></div>')+
+      '<span class="tm">'+mName(m)+(m.cur?'<br><b class="num">'+fmt(m.life)+'</b> so far':'')+'</span></div>';
   }).join('');
-  var lines=(budget?'<div class="tline bud" style="bottom:'+(budget/max*H+22).toFixed(1)+'px"></div>':'')+
-    (avg6?'<div class="tline avg" style="bottom:'+(avg6/max*H+22).toFixed(1)+'px"></div>':'');
-  var chart='<div class="tchart">'+lines+'<div class="tbars">'+bars+'</div></div>'+
-    '<div class="tleg"><span><i class="life"></i>Everyday</span><span><i class="one"></i>One-offs ≥ RM '+fmt(ONE_OFF)+'</span>'+
-      (budget?'<span><i class="lb"></i>Budget '+fmt(budget)+'</span>':'')+(avg6?'<span><i class="la"></i>Usual '+fmt(avg6)+'</span>':'')+'</div>'+
-    '<div class="mini" style="text-align:left;margin-top:2px">Tap a bar to open that month</div>';
+  var chart='<div class="tchart"><div class="tbars">'+bars+'</div></div>'+
+    '<div class="tleg"><span><i class="life"></i>Everyday (under RM '+fmt(ONE_OFF)+', no installments)</span>'+(usual&&cur?'<span><i class="lg"></i>Usual month RM '+fmt(usual)+'</span>':'')+'</div>';
 
-  /* each group, last six months (this one included, faded while in progress) */
-  var six=months.slice(-6), gset={};
-  six.forEach(function(m){ monthOf(m.k).forEach(function(e){ gset[e.cat]=1; }); });
-  var gorder=cfg.cats.map(function(g){return g.n;}).filter(function(n){return gset[n];});
-  Object.keys(gset).forEach(function(n){ if(gorder.indexOf(n)<0) gorder.push(n); });
-  var grows=gorder.map(function(n){
-    var vals=six.map(function(m){ return monthOf(m.k).filter(function(e){return e.cat===n;}).reduce(sum,0); });
-    var past=vals.slice(0,-1).filter(function(v){return v>0;}), gavg=past.length?past.reduce(function(a,v){return a+v;},0)/past.length:0;
-    var gm=Math.max.apply(null,vals.concat([1]));
-    var curV=vals[vals.length-1], day=now.getDate(), dim=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
-    var t=vsUsual(curV,gavg,true,day,dim);
-    var g=findGroup(n);
-    return '<div class="grow" onclick="insGo(\'month\',null);openDrill(\'cat\',\''+jsq(n)+'\')">'+
-      '<span class="ce">'+(g?g.e:'•')+'</span><div class="gname"><b>'+esc(n)+'</b>'+t+'<small class="num">usual RM '+fmt(gavg)+'</small></div>'+
-      '<div class="spark">'+vals.map(function(v,i){return '<i class="'+(i===vals.length-1?'cur':'')+'" style="height:'+Math.max(v/gm*100,v?6:2).toFixed(0)+'%" title="RM '+fmt(v)+'"></i>';}).join('')+'</div>'+
-      '<b class="num gcur">RM '+fmt(curV)+'</b></div>';
-  }).join('')||'<div class="mini">Nothing yet.</div>';
+  /* What moved: each group's last full month against its months before,
+     biggest RM swing first — the "why" behind the verdict. */
+  var moved='';
+  if(last&&before.length){
+    var gs={}; [last].concat(before).forEach(function(m){ monthOf(m.k).filter(isEveryday).forEach(function(e){gs[e.cat]=1;}); });
+    var rows=Object.keys(gs).map(function(n){
+      function g(m){return monthOf(m.k).filter(function(e){return isEveryday(e)&&e.cat===n;}).reduce(sum,0);}
+      var b=avgOf(before.map(g)), l=g(last); return {n:n,b:b,l:l,d:l-b};
+    }).filter(function(r){return Math.abs(r.d)>=30;}).sort(function(a,b){return Math.abs(b.d)-Math.abs(a.d);}).slice(0,6);
+    var dm=Math.max.apply(null,rows.map(function(r){return Math.abs(r.d);}).concat([1]));
+    moved=rows.length?'<div class="bdh">What moved · '+mName(last)+' vs before · tap to open</div>'+rows.map(function(r){
+      var g=findGroup(r.n), w=(Math.abs(r.d)/dm*50).toFixed(1);
+      return '<div class="mrow" onclick="insGo(\'month\',\''+last.k+'\');openDrill(\'cat\',\''+jsq(r.n)+'\')">'+
+        '<span class="ce">'+(g?g.e:'•')+'</span><div class="gname"><b>'+esc(r.n)+'</b><small class="num">RM '+fmt(r.l)+' · usually '+fmt(r.b)+'</small></div>'+
+        '<div class="dbar"><i class="'+(r.d>0?'up':'dn')+'" style="width:'+w+'%"></i></div>'+
+        '<b class="num mdel '+(r.d>0?'up':'dn')+'">'+(r.d>0?'+':'−')+fmt(Math.abs(r.d))+'</b></div>';
+    }).join(''):'<div class="bdh">What moved</div><div class="mini" style="text-align:left">No group moved more than RM 30 in '+mName(last,true)+'.</div>';
+  }
+
+  /* One-offs and installments, by month — kept out of the trend, not hidden */
+  var bigRows=months.slice().reverse().filter(function(m){return m.big.length;}).map(function(m){
+    var inst=m.big.filter(function(e){return e.inst;}).reduce(sum,0), one=m.big.filter(function(e){return !e.inst;});
+    var bits=one.map(function(e){return esc(shortLabel(e))+' '+fmt(e.amt);}); if(inst) bits.push('installments '+fmt(inst));
+    return '<div class="row" onclick="insGo(\'month\',\''+m.k+'\')"><div class="l"><span class="bm">'+mName(m)+'</span><small style="margin:0">'+bits.join(' · ')+'</small></div>'+
+      '<b class="num">RM '+fmt(m.big.reduce(sum,0))+'</b></div>';
+  }).join('');
 
   /* need share, six months */
+  var six=months.slice(-6);
   var needRow='<div class="nrow">'+six.map(function(m){
     var pc=m.tot?Math.round(m.need/m.tot*100):null;
-    return '<div><div class="nb"><i style="height:'+(pc||0)+'%"></i></div><span class="num">'+(pc==null?'–':pc+'%')+'</span><small>'+mShort(m)+'</small></div>';
+    return '<div><div class="nb"><i style="height:'+(pc||0)+'%"></i></div><span class="num">'+(pc==null?'–':pc+'%')+'</span><small>'+mName(m)+'</small></div>';
   }).join('')+'</div>';
 
-  /* the year's top groups */
-  var yc={}; ytd.forEach(function(e){yc[e.cat]=(yc[e.cat]||0)+e.amt;});
+  /* the year */
+  var yr=String(now.getFullYear()), ytd=past.filter(function(e){return entryMonth(e).slice(0,4)===yr;});
+  var ytdTot=ytd.reduce(sum,0), yc={}; ytd.forEach(function(e){yc[e.cat]=(yc[e.cat]||0)+e.amt;});
   var top=Object.keys(yc).sort(function(a,b){return yc[b]-yc[a];}).slice(0,6).map(function(n,i){
     var g=findGroup(n);
     return '<div class="row"><div class="l"><span class="rank">'+(i+1)+'</span><span class="e">'+(g?g.e:'•')+'</span>'+esc(n)+'</div>'+
@@ -1339,11 +1386,11 @@ function trendHtml(){
       return '<div class="row"><div class="l">'+esc(p.d)+'<small style="margin-left:6px">'+p.n+' × RM '+fmt(p.per)+'</small></div><b class="num">RM '+fmt(p.left)+'</b></div>';}).join('');
   }
 
-  return insTabs()+kpis+
-    '<div class="bdh">Last 12 months</div>'+chart+
-    '<div class="bdh">Each group · last 6 months · tap to open</div>'+grows+
+  return insTabs()+verdict+
+    '<div class="bdh">Everyday, month by month · tap a bar</div>'+chart+moved+
+    (bigRows?'<div class="bdh">One-offs &amp; installments · kept out of the trend</div>'+bigRows:'')+
     '<div class="bdh">Need share · last 6 months</div>'+needRow+
-    (top?'<div class="bdh">Top groups · '+yr+'</div>'+top:'')+inst;
+    (top?'<div class="bdh">'+yr+' so far · RM '+fmt(ytdTot)+'</div>'+top:'')+inst;
 }
 function tripsHtml(){
   function sum(a,e){return a+e.amt;}
