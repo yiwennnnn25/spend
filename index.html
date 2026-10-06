@@ -334,7 +334,7 @@
 
 <script>
 "use strict";
-var APP_VERSION='2026-10-06c'; /*APPVER:2026-10-06c*/
+var APP_VERSION='2026-10-06d'; /*APPVER:2026-10-06d*/
 /* Categories are groups with optional sub-categories. An entry stores the
    group in `cat` (so every total, and the suite reading the gist, still
    rolls up by group) and the sub in `sub`. A group with no subs logs
@@ -879,8 +879,33 @@ document.getElementById('sheet').addEventListener('click',function(e){if(e.targe
   },{passive:true});
 })();
 
+var recentUp=false;
 function recentHtml(){
-  var list=entries.slice().reverse().slice(0,40);
+  /* Installments are saved as dated parts out to their last month, so
+     newest-first used to fill Recent with next year's parts and push what
+     she actually spent this week out of sight. Past and today only here;
+     the scheduled parts fold into one row per plan up top. */
+  var now=Date.now(), past=[], fut=[];
+  entries.forEach(function(e){ (new Date(e.ts).getTime()>now?fut:past).push(e); });
+  var list=past.slice().reverse().slice(0,60);
+  var plans={}, order=[];
+  fut.slice().sort(function(a,b){return a.ts<b.ts?-1:1;}).forEach(function(e){
+    var k=planKey(e)||e.id;
+    if(!plans[k]){ plans[k]={next:e,n:0,left:0}; order.push(k); }
+    plans[k].n++; plans[k].left+=e.amt;
+  });
+  var up='';
+  if(order.length){
+    var tot=order.reduce(function(a,k){return a+plans[k].left;},0);
+    up='<div class="row rowc" onclick="recentUp=!recentUp;openSheet(\'recent\')"><div class="l"><span class="e">🗓️</span><div>Upcoming installments'+
+      '<small>'+order.length+' plan'+(order.length===1?'':'s')+' · '+fut.length+' part'+(fut.length===1?'':'s')+' still to come</small></div></div>'+
+      '<div class="l"><b class="num">RM '+fmt(tot)+'</b><b style="margin-left:6px;color:var(--ink3)">'+(recentUp?'▾':'›')+'</b></div></div>';
+    if(recentUp) up+=order.map(function(k){ var p=plans[k], e=p.next, d=new Date(e.ts);
+      return '<div class="row rowc" style="padding-left:18px" onclick="openEdit(\''+e.id+'\')"><div class="l"><span class="e">'+e.e+'</span><div>'+esc(planDesc(e))+
+        '<small>next '+d.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})+' · '+p.n+' left · '+esc(catLabel(e))+'</small></div></div>'+
+        '<div class="l"><b class="num">RM '+fmt(p.left)+'</b></div></div>';
+    }).join('');
+  }
   var rows=list.map(function(e){
     var d=new Date(e.ts);
     return '<div class="row rowc" onclick="openEdit(\''+e.id+'\')"><div class="l"><span class="e">'+e.e+'</span><div>'+esc(catLabel(e))+(e.note?' · '+esc(e.note):'')+
@@ -888,7 +913,7 @@ function recentHtml(){
       ' · '+e.method+' · '+(e.need==='need'?'Need':'Want')+fxTag(e)+'</small></div></div>'+
       '<div class="l"><b class="num">RM '+fmt(e.amt)+'</b></div></div>';
   }).join('') || '<div class="mini">No expenses yet. Type an amount and tap a category.</div>';
-  return '<h2>Recent<button class="x" onclick="closeSheet()">✕</button></h2>'+rows+(list.length?'<div class="mini">Tap a row to edit · swipe ← for Insights</div>':'');
+  return '<h2>Recent<button class="x" onclick="closeSheet()">✕</button></h2>'+up+rows+(list.length?'<div class="mini">Tap a row to edit · swipe ← for Insights</div>':'');
 }
 function delEntry(id){
   var i=entries.findIndex(function(e){return e.id===id;});
