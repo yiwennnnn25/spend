@@ -352,7 +352,7 @@
 
 <script>
 "use strict";
-var APP_VERSION='2026-10-06e'; /*APPVER:2026-10-06e*/
+var APP_VERSION='2026-10-07b'; /*APPVER:2026-10-07b*/
 /* Categories are groups with optional sub-categories. An entry stores the
    group in `cat` (so every total, and the suite reading the gist, still
    rolls up by group) and the sub in `sub`. A group with no subs logs
@@ -455,18 +455,33 @@ function migrateCats(){
   var changed=false;
   if(!cfg.catV || cfg.cats.some(function(c){ return !c.subs; })){
     var tree=JSON.parse(JSON.stringify(DEFAULT_CATS));
-    var names={}; tree.forEach(function(g){ names[g.n.toLowerCase()]=1; });
+    var names={}; tree.forEach(function(g){ names[catNorm(g.n)]=1; });
     (cfg.cats||[]).forEach(function(c){
       if(!c||!c.n) return;
-      var k=c.n.toLowerCase();
+      var k=catNorm(c.n);
       if(OLD_CATS[k]||names[k]) return;
       names[k]=1;
       tree.splice(tree.length-1,0,{e:c.e||'•',n:c.n,subs:(c.subs||[])});
     });
     cfg.cats=tree; cfg.catV=2; changed=true;
   }
+  /* Two groups that are the same name give or take a space or capital
+     ("Wellness" and "Wellness ") were kept apart, which is how she ended
+     up with two Wellness tiles. Fold the later into the first: its subs
+     join (no doubles), its limit carries if the first had none. */
+  var seen={}, kept=[];
+  cfg.cats.forEach(function(g){
+    var k=catNorm(g.n), first=seen[k];
+    if(!first){ seen[k]=g; kept.push(g); return; }
+    (g.subs||[]).forEach(function(sb){ if(!first.subs.some(function(x){return catNorm(x.n)===catNorm(sb.n);})) first.subs.push(sb); });
+    if(cfg.limits&&cfg.limits[g.n]&&!cfg.limits[first.n]) cfg.limits[first.n]=cfg.limits[g.n];
+    if(cfg.limits) delete cfg.limits[g.n];
+    changed=true;
+  });
+  if(kept.length!==cfg.cats.length) cfg.cats=kept;
   if(changed) save(CKEY,cfg);
 }
+function catNorm(n){ return String(n||'').trim().toLowerCase(); }
 migrateCats();
 
 function syncCatIcons(){
@@ -481,6 +496,12 @@ function syncCatIcons(){
     if(m && !e.sub && !findGroup(e.cat)){
       e.cat=m[0]; if(m[1]) e.sub=m[1]; e.u=now; moved=true;
     }
+    if(e.cat&&!findGroup(e.cat)){ // "Wellness " → "Wellness" once the twin group is folded away
+      var tw=cfg.cats.find(function(g){return catNorm(g.n)===catNorm(e.cat);});
+      if(tw){ e.cat=tw.n; e.u=now; moved=true; }
+    }
+    if(e.sub){ var gg=findGroup(e.cat), ts=gg&&!findSub(gg,e.sub)&&gg.subs.find(function(x){return catNorm(x.n)===catNorm(e.sub);});
+      if(ts){ e.sub=ts.n; e.u=now; moved=true; } }
     var want=iconFor(e.cat,e.sub);
     if(want && e.e!==want){ e.e=want; fixed=true; }
   });
@@ -873,6 +894,7 @@ function openSheet(kind){
   else if(kind==='makan') body.innerHTML=makanHtml();
   else if(kind==='refile') body.innerHTML=refileHtml();
   else if(kind==='hist') body.innerHTML=histHtml();
+  else if(kind==='merge') body.innerHTML=mergeHtml();
   else body.innerHTML=setHtml();
   currentSheet=kind;
   document.getElementById('sheet').classList.add('open');
@@ -903,26 +925,16 @@ function recentHtml(){
      newest-first used to fill Recent with next year's parts and push what
      she actually spent this week out of sight. Past and today only here;
      the scheduled parts fold into one row per plan up top. */
-  var now=Date.now(), past=[], fut=[];
-  entries.forEach(function(e){ (new Date(e.ts).getTime()>now?fut:past).push(e); });
+  var now=Date.now(), past=[];
+  entries.forEach(function(e){ if(new Date(e.ts).getTime()<=now) past.push(e); });
   var list=past.slice().reverse().slice(0,60);
-  var plans={}, order=[];
-  fut.slice().sort(function(a,b){return a.ts<b.ts?-1:1;}).forEach(function(e){
-    var k=planKey(e)||e.id;
-    if(!plans[k]){ plans[k]={next:e,n:0,left:0}; order.push(k); }
-    plans[k].n++; plans[k].left+=e.amt;
-  });
-  var up='';
-  if(order.length){
-    var tot=order.reduce(function(a,k){return a+plans[k].left;},0);
+  var ap=activePlans(), up='';
+  if(ap.length){
+    var tot=ap.reduce(function(a,p){return a+p.left;},0), parts=ap.reduce(function(a,p){return a+p.leftN;},0);
     up='<div class="row rowc" onclick="recentUp=!recentUp;openSheet(\'recent\')"><div class="l"><span class="e">🗓️</span><div>Upcoming installments'+
-      '<small>'+order.length+' plan'+(order.length===1?'':'s')+' · '+fut.length+' part'+(fut.length===1?'':'s')+' still to come</small></div></div>'+
+      '<small>'+ap.length+' plan'+(ap.length===1?'':'s')+' · '+parts+' payment'+(parts===1?'':'s')+' still to come</small></div></div>'+
       '<div class="l"><b class="num">RM '+fmt(tot)+'</b><b style="margin-left:6px;color:var(--ink3)">'+(recentUp?'▾':'›')+'</b></div></div>';
-    if(recentUp) up+=order.map(function(k){ var p=plans[k], e=p.next, d=new Date(e.ts);
-      return '<div class="row rowc" style="padding-left:18px" onclick="openEdit(\''+e.id+'\')"><div class="l"><span class="e">'+e.e+'</span><div>'+esc(planDesc(e))+
-        '<small>next '+d.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})+' · '+p.n+' left · '+esc(catLabel(e))+'</small></div></div>'+
-        '<div class="l"><b class="num">RM '+fmt(p.left)+'</b></div></div>';
-    }).join('');
+    if(recentUp) up+=ap.map(function(p){ return planRow(p).replace('class="row rowc"','class="row rowc" style="padding-left:18px"'); }).join('');
   }
   var rows=list.map(function(e){
     var d=new Date(e.ts);
@@ -1378,12 +1390,10 @@ function trendHtml(){
   }).join('');
 
   /* installments still to come */
-  var fut=entries.filter(function(e){return e.inst&&new Date(e.ts).getTime()>now.getTime();});
-  var inst='';
-  if(fut.length){
-    var plans={}; fut.forEach(function(e){ var p=plans[e.inst.g]||(plans[e.inst.g]={d:e.inst.desc||shortLabel(e),left:0,n:0,per:e.amt}); p.left+=e.amt; p.n++; });
-    inst='<div class="bdh">Installments still to pay</div>'+Object.keys(plans).map(function(k){var p=plans[k];
-      return '<div class="row"><div class="l">'+esc(p.d)+'<small style="margin-left:6px">'+p.n+' × RM '+fmt(p.per)+'</small></div><b class="num">RM '+fmt(p.left)+'</b></div>';}).join('');
+  var ap=activePlans(), inst='';
+  if(ap.length){
+    var allLeft=ap.reduce(function(a,p){return a+p.left;},0), perMo=ap.reduce(function(a,p){return a+p.per;},0);
+    inst='<div class="bdh">Installments still to pay · RM '+fmt(allLeft)+' · about RM '+fmt(perMo)+' a month</div>'+ap.map(planRow).join('');
   }
 
   return insTabs()+verdict+
@@ -1721,11 +1731,52 @@ function renameCat(inp){
   save(CKEY,cfg); syncCatIcons(); renderCats(); 
 }
 function addCat(){cfg.cats.splice(Math.max(cfg.cats.length-1,0),0,{e:'•',n:'New group',subs:[]});save(CKEY,cfg);renderCats();openSheet('set');}
+/* Removing a group that still has entries asks where they go — into
+   another group, or straight into one of its subs — so an old duplicate
+   can be cleared without stranding its history under a dead name. */
+var mergeFrom=null;
 function rmCat(i){
-  var n=entries.filter(function(e){return e.cat===cfg.cats[i].n;}).length;
-  if(n&&!confirm('Remove '+cfg.cats[i].n+'?\n\nIts '+n+' past entr'+(n===1?'y keeps':'ies keep')+' the name, so totals stay right.'))return;
-  cfg.cats.splice(i,1);save(CKEY,cfg);openGroup=null;renderCats();openSheet('set');
+  var g=cfg.cats[i], n=entries.filter(function(e){return e.cat===g.n;}).length;
+  if(!n){ if(!confirm('Remove '+g.n+'?')) return; cfg.cats.splice(i,1); save(CKEY,cfg); openGroup=null; renderCats(); openSheet('set'); return; }
+  mergeFrom=g.n; openSheet('merge');
 }
+function mergeHtml(){
+  var g=findGroup(mergeFrom); if(!g) return '<div class="mini">—</div>';
+  var n=entries.filter(function(e){return e.cat===g.n;}).length;
+  var opts=cfg.cats.filter(function(x){return x!==g;}).map(function(t){
+    var gi=cfg.cats.indexOf(t);
+    return '<div class="row rowc" onclick="mergeInto('+gi+',-1)"><div class="l"><span class="e">'+t.e+'</span><b>'+esc(t.n)+'</b>'+(t.subs.length?'<small style="margin-left:6px">keeps each entry\'s sub where it matches</small>':'')+'</div><b>›</b></div>'+
+      t.subs.map(function(sb,si){ return '<div class="row rowc" style="padding-left:30px" onclick="mergeInto('+gi+','+si+')"><div class="l"><span class="e">'+sb.e+'</span>'+esc(t.n)+' › '+esc(sb.n)+'</div><b>›</b></div>'; }).join('');
+  }).join('');
+  return '<h2>Remove '+esc(g.e+' '+g.n)+'<button class="x back" onclick="openSheet(\'set\')">‹ Back</button></h2>'+
+    '<div class="mini" style="text-align:left;margin:0 0 6px">It has <b>'+n+' past entr'+(n===1?'y':'ies')+'</b>. Pick where they move — then '+esc(g.n)+' is removed.</div>'+
+    '<div class="row rowc" onclick="mergeInto(-1,-1)"><div class="l" style="color:var(--ink2)">Keep them under the old name instead</div><b>›</b></div>'+
+    '<div class="bdh">Move them into</div>'+opts;
+}
+function mergeInto(gi,si){
+  var from=findGroup(mergeFrom); if(!from) return;
+  var fi=cfg.cats.indexOf(from), list=entries.filter(function(e){return e.cat===from.n;});
+  if(gi<0){
+    if(!confirm('Remove '+from.n+' and leave its '+list.length+' entries under the old name?')) return;
+  } else {
+    var to=cfg.cats[gi], sb=si>=0?to.subs[si]:null;
+    if(!confirm('Move '+list.length+' entr'+(list.length===1?'y':'ies')+' from '+from.n+' to '+to.n+(sb?' › '+sb.n:'')+', then remove '+from.n+'?')) return;
+    var now=Date.now();
+    list.forEach(function(e){
+      e.cat=to.n;
+      if(sb) e.sub=sb.n;
+      else { var m=e.sub&&to.subs.find(function(x){return catNorm(x.n)===catNorm(e.sub);}); if(m) e.sub=m.n; else delete e.sub; }
+      e.e=iconFor(e.cat,e.sub)||e.e; e.u=now;
+    });
+    save(KEY,entries);
+    if(cfg.limits&&cfg.limits[from.n]&&!cfg.limits[to.n]) cfg.limits[to.n]=cfg.limits[from.n];
+  }
+  if(cfg.limits) delete cfg.limits[from.n];
+  cfg.cats.splice(fi,1); save(CKEY,cfg); openGroup=null; renderCats(); renderTotals();
+  toast(gi<0?'Removed '+from.n:'Moved '+list.length+' · removed '+from.n);
+  mergeFrom=null; openSheet('set');
+}
+window.mergeInto=mergeInto;
 function addSub(i){
   var g=cfg.cats[i], k=1, name='New'; while(findSub(g,name)) name='New '+(++k);
   g.subs.push({e:'•',n:name});save(CKEY,cfg);renderCats();openSheet('set');
@@ -1746,6 +1797,38 @@ function planKey(e){
   var m=String(e.note||'').match(/^(.*?)\s*(\d+)\/(\d+)\s*$/);
   if(m&&+m[3]>=2&&+m[2]<=+m[3]) return 'n:'+m[1].trim().toLowerCase()+'|'+e.cat+'|'+m[3];
   return null;
+}
+/* Every installment plan and what is still to pay on it. A plan can be
+   split ahead (future-dated parts exist) or logged month by month as she
+   pays ("3/12", then "4/12"…) — then the remaining parts don't exist yet
+   and are worked out from the numbering, at the last part's amount. */
+function planRow(p){
+  return '<div class="row rowc" onclick="openEdit(\''+p.first.id+'\')"><div class="l"><span class="e">'+p.e.e+'</span><div>'+esc(p.desc)+
+    '<small>'+p.paid+' of '+p.n+' paid · '+p.leftN+' left × RM '+fmt(p.per)+(p.next?' · next '+p.next.toLocaleDateString('en-GB',{day:'numeric',month:'short'}):'')+
+    (p.est?' · not all logged yet':'')+'</small></div></div><div class="l"><b class="num">RM '+fmt(p.left)+'</b></div></div>';
+}
+function partNo(e){
+  if(e.inst&&e.inst.i) return {i:+e.inst.i,n:+e.inst.n};
+  var m=String(e.note||'').match(/(\d+)\/(\d+)\s*$/);
+  return m?{i:+m[1],n:+m[2]}:null;
+}
+function addMonthsTs(ts,n){ var d=new Date(ts), x=new Date(d.getTime()), day=d.getDate(); x.setDate(1); x.setMonth(x.getMonth()+n); x.setDate(Math.min(day,new Date(x.getFullYear(),x.getMonth()+1,0).getDate())); return x; }
+function activePlans(){
+  var now=Date.now(), groups={};
+  entries.forEach(function(e){ var k=planKey(e); if(k) (groups[k]=groups[k]||[]).push(e); });
+  return Object.keys(groups).map(function(k){
+    var parts=groups[k].slice().sort(function(a,b){return a.ts<b.ts?-1:1;});
+    var n=0, hi=0; parts.forEach(function(e){ var p=partNo(e); if(p){ n=Math.max(n,p.n); hi=Math.max(hi,p.i); } });
+    var fut=parts.filter(function(e){return new Date(e.ts).getTime()>now;});
+    var last=parts[parts.length-1], per=last.amt;
+    var unlogged=Math.max(0,n-hi);                 // parts not in the app yet
+    var left=fut.reduce(function(a,e){return a+e.amt;},0)+unlogged*per;
+    var next=fut.length?new Date(fut[0].ts):(unlogged?addMonthsTs(last.ts,1):null);
+    var paid=parts.length-fut.length;
+    return {key:k, desc:planDesc(last), e:last, parts:parts, n:n||parts.length, paid:paid, leftN:fut.length+unlogged,
+      left:left, per:per, next:next, est:unlogged>0, first:fut[0]||last};
+  }).filter(function(p){ return p.leftN>0&&p.parts.length>=1&&(p.parts.length>1||p.n>1); })
+    .sort(function(a,b){ return (a.next||0)-(b.next||0); });
 }
 function planParts(e){ var k=planKey(e); return k?entries.filter(function(x){return planKey(x)===k;}):[e]; }
 function planDesc(e){ return (e.inst&&e.inst.desc)||String(e.note||'').replace(/\s*\d+\/\d+\s*$/,'')||shortLabel(e); }
