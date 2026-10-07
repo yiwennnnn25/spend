@@ -352,7 +352,7 @@
 
 <script>
 "use strict";
-var APP_VERSION='2026-10-07b'; /*APPVER:2026-10-07b*/
+var APP_VERSION='2026-10-07d'; /*APPVER:2026-10-07d*/
 /* Categories are groups with optional sub-categories. An entry stores the
    group in `cat` (so every total, and the suite reading the gist, still
    rolls up by group) and the sub in `sub`. A group with no subs logs
@@ -360,10 +360,10 @@ var APP_VERSION='2026-10-07b'; /*APPVER:2026-10-07b*/
 var DEFAULT_CATS = [
   {e:'🍜',n:'Food',subs:[{e:'🍽️',n:'Eating out'},{e:'🛵',n:'GrabFood'},{e:'🧋',n:'Drinks'},{e:'🍪',n:'Snacks'},{e:'🛒',n:'Groceries'}]},
   // treatments and services; skincare/makeup products are Shopping › Beauty
-  {e:'🌿',n:'Wellness',subs:[{e:'🧖',n:'Facial'},{e:'💇',n:'Hair & scalp'},{e:'💆',n:'Massage'},{e:'💉',n:'Aesthetic'},{e:'🩺',n:'Health'}]},
+  {e:'🌿',n:'Wellness',subs:[{e:'🧖‍♀️',n:'Facial'},{e:'💇‍♀️',n:'Hair & scalp'},{e:'💆‍♀️',n:'Massage'},{e:'💉',n:'Aesthetic'},{e:'🩺',n:'Health'}]},
   // money spent on someone goes under who; her own share of a meal out is Food
   {e:'👪',n:'Family',subs:[{e:'👨',n:'Dad'},{e:'👩',n:'Mum'},{e:'👦',n:'Brothers'},{e:'🎡',n:'Outings'}]},
-  {e:'🏋️',n:'Fitness',subs:[{e:'🧘',n:'Classes'},{e:'🏸',n:'Equipment'}]},
+  {e:'🏋️‍♀️',n:'Fitness',subs:[{e:'🧘‍♀️',n:'Classes'},{e:'🏸',n:'Equipment'}]},
   {e:'🚗',n:'Transport',subs:[{e:'🅿️',n:'Parking & toll'},{e:'🚕',n:'Grab rides'},{e:'🔧',n:'Car care'},{e:'⚡',n:'EV charging'}]},
   {e:'🏠',n:'Home',subs:[{e:'🧺',n:'Necessities'},{e:'🛋️',n:'Home items'}]},
   {e:'🛍️',n:'Shopping',subs:[{e:'👗',n:'Clothes'},{e:'💄',n:'Beauty'},{e:'📦',n:'Online'},{e:'🎧',n:'Gadgets'}]},
@@ -483,6 +483,15 @@ function migrateCats(){
 }
 function catNorm(n){ return String(n||'').trim().toLowerCase(); }
 migrateCats();
+/* Her categories in the woman versions of the people emoji (2026-10-07).
+   Once, and only where the old default is still there — an emoji she
+   picked herself is left alone. Entries follow via syncCatIcons. */
+(function femaleEmoji(){
+  if(cfg.emojiV>=1) return;
+  var F={'💇':'💇‍♀️','💆':'💆‍♀️','🧖':'🧖‍♀️','🧘':'🧘‍♀️','🏋️':'🏋️‍♀️','🏋':'🏋️‍♀️','🙆':'🙆‍♀️','🏃':'🏃‍♀️','🚶':'🚶‍♀️','🧑':'👩'};
+  cfg.cats.forEach(function(g){ if(F[g.e]) g.e=F[g.e]; (g.subs||[]).forEach(function(sb){ if(F[sb.e]) sb.e=F[sb.e]; }); });
+  cfg.emojiV=1; save(CKEY,cfg);
+})();
 
 function syncCatIcons(){
   /* Old rows are refiled under their new group/sub (stamped, so the cloud
@@ -886,6 +895,8 @@ var currentSheet=null, dayKey=null, editBack='recent';
 function openSheet(kind){
   hideLast();
   var body=document.getElementById('sheetBody');
+  // redrawing the sheet that's already open (adding a sub, removing one…) keeps her place
+  var keep=(kind===currentSheet&&document.getElementById('sheet').classList.contains('open'))?body.scrollTop:0;
   if(kind==='recent') body.innerHTML=recentHtml();
   else if(kind==='break') body.innerHTML=breakHtml();
   else if(kind==='day') body.innerHTML=dayHtml(dayKey);
@@ -898,7 +909,7 @@ function openSheet(kind){
   else body.innerHTML=setHtml();
   currentSheet=kind;
   document.getElementById('sheet').classList.add('open');
-  body.scrollTop=0;
+  body.scrollTop=keep;
   if(kind==='set') wireSettings();
   if(kind==='edit') wireEdit(editId);
   if(kind==='makan') wireMakan();
@@ -1780,6 +1791,9 @@ window.mergeInto=mergeInto;
 function addSub(i){
   var g=cfg.cats[i], k=1, name='New'; while(findSub(g,name)) name='New '+(++k);
   g.subs.push({e:'•',n:name});save(CKEY,cfg);renderCats();openSheet('set');
+  // straight into naming it
+  var inp=document.querySelector('#sheetBody input[data-t="sub"][data-i="'+i+'"][data-j="'+(g.subs.length-1)+'"][data-f="n"]');
+  if(inp){ inp.scrollIntoView({block:'center'}); inp.focus(); inp.select(); }
 }
 function rmSub(i,j){
   var g=cfg.cats[i], sb=g.subs[j];
@@ -2326,18 +2340,27 @@ function checkUpdate(){
     .then(function(t){
       if(!t) return;
       var m=t.match(/APPVER:([0-9a-z-]+)/);
-      if(m&&m[1]&&m[1]!==APP_VERSION) showUpdateBanner();
+      if(m&&m[1]&&m[1]!==APP_VERSION) showUpdateBanner(m[1]);
     }).catch(function(){});
 }
-function showUpdateBanner(){
+/* A Home Screen app mostly resumes from the background instead of
+   starting, so checking only at start meant she never saw a new version.
+   Check again whenever it comes back to the front (at most every 10 min). */
+var lastUpdCheck=0;
+document.addEventListener('visibilitychange',function(){
+  if(document.visibilityState==='visible'&&Date.now()-lastUpdCheck>600e3){ lastUpdCheck=Date.now(); checkUpdate(); }
+});
+function showUpdateBanner(v){
   if(document.getElementById('upd')) return;
   var b=document.createElement('div'); b.id='upd'; b.className='upd';
+  /* a plain reload can be answered from the 10-minute page cache and come
+     back as the old version; a new address forces the new copy */
   b.innerHTML='<span>New version available</span>'+
-    '<button onclick="location.reload()">Update</button>'+
+    '<button onclick="location.replace(location.pathname+\'?v='+(v||Date.now())+'\')">Update</button>'+
     '<button class="updx" onclick="this.parentNode.remove()">✕</button>';
   document.body.appendChild(b);
 }
-setTimeout(checkUpdate,1500);
+setTimeout(function(){ lastUpdCheck=Date.now(); checkUpdate(); },1500);
 
 setStep('amt');renderCur();fxAuto();renderMethods();renderNeed();renderCats();renderKeys();renderAmt();renderTotals();
 
