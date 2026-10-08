@@ -25,12 +25,28 @@
   body{display:flex;flex-direction:column;max-width:520px;margin:0 auto;min-height:100%}
   .num{font-variant-numeric:tabular-nums}
 
-  header{padding:9px 18px 3px;text-align:center}
+  /* The month card: what's gone, a shiny bar against the budget with a tick
+     for where today "should" be, and today / left as two quiet ends. */
+  header{position:relative;margin:8px 14px 0;padding:11px 16px 12px;border-radius:20px;cursor:pointer;
+    background:linear-gradient(150deg,#fdf1f5,#f5ebfb 60%,#fdf5e8);border:1px solid #f0d9e4;box-shadow:var(--shadow);overflow:hidden}
+  header:active{transform:scale(.99)}
+  .htop{display:flex;align-items:baseline;justify-content:space-between}
   .month{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--lav);font-weight:700}
-  .mtot{font-size:30px;font-weight:700;margin-top:1px;letter-spacing:-1px;color:var(--ink)}
-  .sub{font-size:12px;color:var(--ink2);margin-top:3px}
-  .bar{height:7px;background:var(--card2);border-radius:6px;margin:7px 24px 0;overflow:hidden}
-  .bar > i{display:block;height:100%;background:var(--bar);width:0;border-radius:6px;transition:width .3s,background .3s}
+  .hday{font-size:11px;color:var(--ink2);font-weight:600}
+  .mtot{font-size:32px;font-weight:700;margin-top:2px;letter-spacing:-1px;color:var(--ink);text-align:left;line-height:1.1}
+  .mtot small{font-size:.5em;color:var(--ink3);font-weight:600;margin-right:4px;letter-spacing:0}
+  .bar{position:relative;height:9px;background:rgba(255,255,255,.75);border-radius:6px;margin:9px 0 0;overflow:visible}
+  .bar > i{position:relative;display:block;height:100%;background:var(--bar);width:0;border-radius:6px;transition:width .4s,background .3s;overflow:hidden}
+  .bar > i::after{content:'';position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(255,255,255,.75) 50%,transparent 70%);
+    background-size:220% 100%;animation:sheen 3.6s ease-in-out infinite}
+  @keyframes sheen{0%{background-position:130% 0}60%,100%{background-position:-90% 0}}
+  .bar .tick{position:absolute;top:-3px;bottom:-3px;width:2px;margin-left:-1px;border-radius:2px;background:var(--ink3);opacity:.7}
+  .bar .tip{position:absolute;top:50%;margin:-7px 0 0 -5px;font-size:10px;color:#e9a9d9;animation:tw 2.8s ease-in-out infinite;pointer-events:none}
+  .hfoot{display:flex;justify-content:space-between;align-items:center;margin-top:7px;font-size:12px;color:var(--ink2)}
+  .hfoot b{color:var(--ink);font-weight:700}
+  .hfoot .hst{font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px}
+  .hst.ok{background:var(--need-bg);color:var(--need)} .hst.hot{background:var(--want-bg);color:var(--want)} .hst.over{background:#fbe3e8;color:var(--blush)}
+  .hset{color:var(--lav);font-weight:700}
 
   .amt{font-size:38px;font-weight:700;text-align:center;padding:2px 0 12px;letter-spacing:-1.5px;min-height:42px;color:var(--ink)}
   .amt small{font-size:20px;color:var(--ink3);font-weight:600;margin-right:5px}
@@ -142,6 +158,20 @@
     max-height:84vh;overflow:auto;padding:18px 18px calc(22px + var(--pad));box-shadow:0 -8px 30px rgba(60,45,90,.15)}
   .sheet h2{font-size:16px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;font-weight:700}
   .sheet h2 span{color:var(--ink3);font-size:13px;font-weight:500}
+  /* Settings: jump chips that stay put while she scrolls, and folds for the long lists */
+  .sjump{position:sticky;top:-18px;z-index:2;margin:-6px -18px 4px;padding:8px 14px 10px;background:var(--bg);
+    display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;border-bottom:1px solid var(--line)}
+  .sjump::-webkit-scrollbar{display:none}
+  .sjump button{flex:1 0 auto;border:1px solid var(--line);background:var(--card);color:var(--ink2);font-size:11.5px;font-weight:700;
+    padding:6px 5px;border-radius:14px;white-space:nowrap}
+  .sjump button:active{background:var(--mint-bg);color:var(--ink)}
+  .sfold{display:flex;align-items:center;gap:10px;margin-top:6px;padding:12px 14px;border-radius:14px;background:var(--card);
+    border:1px solid var(--line);cursor:pointer;font-size:14px;color:var(--ink)}
+  .sfold small{display:block;font-size:11px;color:var(--ink2);margin-top:1px}
+  .sfold .chev{margin-left:auto;color:var(--ink3);font-weight:700;transition:transform .2s}
+  .sfold.on .chev{transform:rotate(90deg)}
+  .sbody{display:none}.sbody.on{display:block}
+  .bdh[id^="s-"]{scroll-margin-top:52px}
   .x{color:var(--ink3);font-size:22px;border:0;background:none;cursor:pointer;line-height:1}
   .x.back{font-size:14px;font-weight:600} /* 22px is for the ✕ glyph; a word needs far less */
   .row{display:flex;justify-content:space-between;align-items:center;padding:11px 4px;border-bottom:1px solid var(--line);font-size:14px}
@@ -163,7 +193,9 @@
   .nudge{margin:0 16px 7px;background:var(--want-bg);border:1px solid var(--line);border-radius:12px;
     padding:9px 12px;font-size:12px;color:var(--ink);display:none;cursor:pointer;box-shadow:var(--shadow);text-align:center}
   .nudge b{color:var(--want)}
-  .last{position:fixed;left:50%;bottom:calc(78px + var(--pad));transform:translateX(-50%) translateY(16px);
+  /* the after-log card sits under the month total, in the hero's empty
+     space — it used to cover . 0 ⌫ and Next for six seconds */
+  .last{position:fixed;left:50%;top:var(--lastTop,96px);transform:translateX(-50%) translateY(-12px);
     width:calc(100% - 28px);max-width:492px;background:var(--card);border:1px solid var(--line);
     border-radius:16px;padding:10px 12px;opacity:0;pointer-events:none;transition:.25s;z-index:40;
     box-shadow:0 6px 20px rgba(60,45,90,.22)}
@@ -175,7 +207,11 @@
     font-size:12px;font-weight:600;color:var(--ink);cursor:pointer}
   .lchip.n-on{background:var(--need-bg);color:var(--need);border-color:transparent}
   .lchip.w-on{background:var(--want-bg);color:var(--want);border-color:transparent}
-  .lhint{margin-left:auto;font-size:11px;color:var(--ink3)}
+  .lhint{margin-left:auto;font-size:11px;color:var(--ink3);white-space:nowrap;overflow:hidden;min-width:0}
+  .lchips .lchip{white-space:nowrap;flex-shrink:0}
+  .lchips .lchip.lcat{flex-shrink:1;min-width:0;overflow:hidden;text-overflow:ellipsis} /* a long sub gives way, the 💗 never falls off */
+  .lchip.lh{padding:6px 9px;color:#e9a3b8;font-size:13px;line-height:1}
+  .lchip.lh.h-on{background:#fde7ee;border-color:#f4c4d2}
   .lchip.cat-on{background:linear-gradient(160deg,#fbeef6,#f1e4fa);border-color:#ead3ea;color:var(--ink)}
   .lpick{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid var(--line)}
   .lpick .lchip.cur{background:var(--grad);color:#fff;border-color:transparent}
@@ -295,23 +331,79 @@
     background:var(--ink);color:#fff;font-weight:700;font-size:13px;padding:10px 18px;border-radius:22px;
     opacity:0;transition:.25s;pointer-events:none;z-index:40;box-shadow:0 6px 20px rgba(60,45,90,.22)}
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .toast.act{pointer-events:auto;display:flex;align-items:center;gap:10px;padding:7px 8px 7px 16px;white-space:nowrap;max-width:calc(100% - 28px)}
+  .toast.act span{overflow:hidden;text-overflow:ellipsis}
+  .toast.act button{border:0;background:var(--grad);color:#fff;font-weight:700;font-size:12px;padding:6px 12px;border-radius:16px;flex-shrink:0}
   .heat div:active{transform:scale(.92)}
   .upd{position:fixed;top:calc(env(safe-area-inset-top,0px) + 8px);left:50%;transform:translateX(-50%);
     display:flex;align-items:center;gap:8px;background:var(--ink);color:#fff;font-size:12px;font-weight:600;
     padding:7px 8px 7px 14px;border-radius:22px;z-index:60;box-shadow:0 6px 20px rgba(60,45,90,.28)}
   .upd button{border:0;background:var(--grad);color:#fff;font-weight:700;font-size:12px;padding:6px 12px;border-radius:16px}
   .upd .updx{background:transparent;color:var(--ink3);padding:6px 4px}
+  /* The 💗 balloon tied to the 1 key: tap it before logging anything for
+     him or for the two of them. The entry keeps its real category and gets
+     tag:'him' on top, so Food stays Food and the heart has its own total. */
+  .key{position:relative}
+  .hcharm{position:absolute;top:-60px;left:50%;margin-left:-23px;width:46px;height:60px;border:0;background:transparent;padding:0;z-index:3;
+    display:flex;align-items:flex-end;justify-content:center;border-radius:14px;-webkit-tap-highlight-color:transparent;
+    transform-origin:50% 100%;animation:sway 4s ease-in-out infinite}
+  @keyframes sway{0%,100%{transform:translateY(0) rotate(-4deg)}50%{transform:translateY(-3px) rotate(4deg)}}
+  .hcharm svg{width:30px;height:57.5px;overflow:visible}
+  .hcharm .hb{transform-box:fill-box;transform-origin:50% 100%;transition:transform .25s;filter:drop-shadow(0 1px 1.5px rgba(207,111,134,.25))}
+  .hcharm .hp{fill:#fde7ee;stroke:#e9a3b8;stroke-width:1.5;transition:fill .25s,stroke .25s}
+  .hcharm .hk{fill:#e9a3b8}
+  .hcharm .hs{fill:none;stroke:#e6b0c1;stroke-width:1.1;stroke-linecap:round}
+  .hcharm::after{content:'✦';position:absolute;top:2px;right:4px;font-size:9px;color:#f2adc4;opacity:0;animation:tw 3.2s ease-in-out infinite}
+  @keyframes tw{0%,70%,100%{opacity:0;transform:scale(.6)}80%{opacity:1;transform:scale(1)}}
+  body.him .hcharm .hp{fill:url(#hg);stroke:#d97a9a}
+  body.him .hcharm .hk{fill:#d97a9a}
+  body.him .hcharm .hb{animation:beat 1.6s ease-in-out infinite}
+  body.him .hcharm::after{animation-duration:1.4s}
+  @keyframes beat{0%,100%{transform:scale(1.12)}12%{transform:scale(1.26)}24%{transform:scale(1.1)}}
+  .himpill{display:none;margin:-6px auto 6px;width:max-content;font-size:12px;font-weight:700;color:#cf6f86;background:#fde7ee;
+    border:1px solid #f4c4d2;padding:4px 11px;border-radius:14px}
+  body.him.st-amt .himpill{display:block}
+  .himtag{display:none;margin-left:6px;font-size:11px;font-weight:700;color:#cf6f86;background:#fde7ee;border:1px solid #f4c4d2;padding:2px 8px;border-radius:12px}
+  body.him .himtag{display:inline-block}
+  .himrow{display:flex;align-items:center;gap:10px;margin-top:10px;padding:11px 14px;border-radius:16px;
+    background:linear-gradient(135deg,#fdeef3,#f6e8fb);border:1px solid #f1cfdc}
+  .himrow .hh{font-size:20px}.himrow .hm{flex:1;text-align:left}.himrow .hm b{display:block;font-size:13px}
+  .himrow .hm small{font-size:11px;color:var(--ink2)}.himrow .ha{font-weight:700;color:#cf6f86}
+  .rheart{font-size:11px;margin-left:4px}
+  /* logging for him: the balloon gives a little hop as it lets go */
+  .hcharm.hop{animation:hop .6s ease-out}
+  @keyframes hop{0%{transform:translateY(0)}30%{transform:translateY(-12px) rotate(-6deg)}60%{transform:translateY(2px) rotate(3deg)}100%{transform:translateY(0)}}
+  /* the us diary */
+  .usHero{position:relative;overflow:hidden;background:linear-gradient(150deg,#fdeef3,#f4e6fb 60%,#fdf3e3);border:1px solid #f1cfdc;border-radius:20px;padding:18px 16px 16px;text-align:center}
+  .usHero .ush{font-family:Georgia,'Times New Roman',serif;font-size:22px;color:var(--ink);line-height:1.2}
+  .usHero .ush i{color:#cf6f86;font-style:italic}
+  .usHero .usd{font-size:12px;color:var(--ink2);margin-top:6px}
+  .usHero .usn{display:inline-block;margin-top:10px;font-size:11px;font-weight:700;color:#cf6f86;background:rgba(255,255,255,.7);border-radius:12px;padding:3px 10px}
+  .usHero .tw{position:absolute;color:#f2adc4;font-size:10px;animation:tw 3.2s ease-in-out infinite}
+  .usM{display:flex;justify-content:space-between;align-items:baseline;margin:20px 2px 8px}
+  .usM b{font-family:Georgia,'Times New Roman',serif;font-size:17px;color:var(--ink);font-weight:400}
+  .usM span{font-size:11px;color:var(--ink2)}
+  .usCard{display:flex;gap:12px;align-items:stretch;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:10px 12px;margin-bottom:8px;box-shadow:var(--shadow);cursor:pointer}
+  .usCard:active{transform:scale(.98)}
+  .usDay{flex:0 0 44px;border-radius:12px;background:linear-gradient(160deg,#fde7ee,#f1e4fa);display:flex;flex-direction:column;align-items:center;justify-content:center;color:#cf6f86}
+  .usDay b{font-size:19px;line-height:1}.usDay small{font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase}
+  .usBody{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center}
+  .usBody .usn2{font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:16px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .usBody small{font-size:11px;color:var(--ink2);margin-top:2px}
+  .usAmt{align-self:center;font-size:13px;font-weight:700;color:var(--ink2)}
 </style>
 </head>
 <body>
-  <header>
-    <div class="month" id="monthLbl">—</div>
+  <header onclick="insMonth=null;insTab='month';openSheet('break')">
+    <div class="htop"><div class="month" id="monthLbl">—</div><div class="hday" id="hday"></div></div>
     <div class="mtot num" id="mtot">RM 0</div>
-    <div class="sub" id="sub">RM 0 today</div>
-    <div class="bar"><i id="bar"></i></div>
+    <div class="bar" id="barw"><i id="bar"></i></div>
+    <div class="hfoot" id="sub"></div>
   </header>
 
   <div class="amt zero num" id="amt" onclick="toAmount()"><small>RM</small>0</div>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="hg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f4a7c0"/><stop offset="1" stop-color="#d98bd0"/></linearGradient></defs></svg>
+  <div class="himpill" onclick="toggleHim()">💗 for him · tap to cancel</div>
   <div class="curpill" id="curpill" style="display:none"></div>
   <div class="tripline" id="tripline" style="display:none" onclick="insTab='trips';insTrip=cfg.tripOn;openSheet('break')"></div>
 
@@ -321,7 +413,7 @@
   <!-- Amount, then category, then the details: picking a category swaps the
        grid for this card, pre-filled with what that category usually is. -->
   <div class="confirm" id="confirm">
-    <div class="cfhead"><span id="cfWhat"></span><button onclick="changePick()">Change</button></div>
+    <div class="cfhead"><span><span id="cfWhat"></span><span class="himtag">💗 for him</span></span><button onclick="changePick()">Change</button></div>
     <div class="toggles">
       <div class="seg need" id="needSeg">
         <button data-v="need">Need</button>
@@ -352,7 +444,7 @@
 
 <script>
 "use strict";
-var APP_VERSION='2026-10-07d'; /*APPVER:2026-10-07d*/
+var APP_VERSION='2026-10-08e'; /*APPVER:2026-10-08e*/
 /* Categories are groups with optional sub-categories. An entry stores the
    group in `cat` (so every total, and the suite reading the gist, still
    rolls up by group) and the sub in `sub`. A group with no subs logs
@@ -541,18 +633,29 @@ function streak(){
 function renderTotals(){
   var mo = thisMonth(), mTot = mo.reduce(function(s,e){return s+e.amt;},0);
   var tToday = mo.filter(function(e){return entryDay(e)===todayKey();}).reduce(function(s,e){return s+e.amt;},0);
-  document.getElementById('monthLbl').textContent =
-    new Date(monthKey+'-01').toLocaleDateString('en-GB',{month:'long',year:'numeric'});
-  document.getElementById('mtot').textContent = 'RM '+fmt(mTot);
-  var sub = 'RM '+fmt(tToday)+' today';
-  if(cfg.budget>0){ sub += ' · RM '+fmt(Math.max(cfg.budget-mTot,0))+' left of '+fmt(cfg.budget); }
-  else { sub += ' · set a budget in ⚙'; }
-  var st=streak(); if(st>=2) sub += ' · 🔥'+st;
-  document.getElementById('sub').textContent = sub;
-  var bar=document.getElementById('bar');
-  if(cfg.budget>0){var r=mTot/cfg.budget;bar.style.width=(Math.min(r,1)*100)+'%';
-    bar.style.background = r>1?'var(--blush)': r>0.85?'var(--peach)':'var(--bar)';}
-  else bar.style.width='0';
+  var md=new Date(monthKey+'-01T00:00:00'), dim=new Date(md.getFullYear(),md.getMonth()+1,0).getDate(), day=new Date().getDate();
+  document.getElementById('monthLbl').textContent = md.toLocaleDateString('en-GB',{month:'long'});
+  document.getElementById('hday').textContent = 'day '+day+' of '+dim;
+  document.getElementById('mtot').innerHTML = '<small>RM</small>'+fmt(mTot);
+  var st=streak(), fire=st>=2?' · 🔥'+st:'';
+  var left='<span>RM <b>'+fmt(tToday)+'</b> today'+fire+'</span>';
+  var bar=document.getElementById('bar'), bw=document.getElementById('barw');
+  bw.querySelectorAll('.tick,.tip').forEach(function(x){x.remove();});
+  var pacePct=(day/dim)*100;
+  if(cfg.budget>0){
+    var r=mTot/cfg.budget, w=Math.min(r,1)*100, should=cfg.budget*day/dim, st2;
+    bar.style.width=w+'%';
+    bar.style.background = r>1?'var(--blush)': r>0.85?'var(--peach)':'var(--bar)';
+    /* the tick is where an even month would be today */
+    bw.insertAdjacentHTML('beforeend','<span class="tick" style="left:'+pacePct.toFixed(1)+'%"></span>'+(w>3&&r<=1?'<span class="tip" style="left:'+w.toFixed(1)+'%">✦</span>':''));
+    if(r>1) st2='<span class="hst over">RM '+fmt(mTot-cfg.budget)+' over</span>';
+    else if(mTot>should*1.1) st2='<span class="hst hot">RM '+fmt(cfg.budget-mTot)+' left · ahead of pace</span>';
+    else st2='<span class="hst ok">RM '+fmt(cfg.budget-mTot)+' left · on track</span>';
+    document.getElementById('sub').innerHTML=left+st2;
+  } else {
+    bar.style.width=pacePct+'%'; bar.style.background='var(--bar)'; // no budget: the bar is just the month going by
+    document.getElementById('sub').innerHTML=left+'<span class="hset" onclick="event.stopPropagation();openSheet(\'set\')">set a budget ›</span>';
+  }
 }
 /* Travel currency: type what the receipt says, store it in RM. The entry's
    amt stays ringgit so every total, the budget and Wealth OS are untouched;
@@ -739,12 +842,20 @@ function renderKeys(){
   var k=document.getElementById('keys');k.innerHTML='';
   ['1','2','3','4','5','6','7','8','9','.','0','⌫'].forEach(function(t){
     var b=document.createElement('button');b.className='key'+(t==='⌫'||t==='.'?' act':'');b.textContent=t;
-    b.onclick=function(){press(t);};k.appendChild(b);
+    b.onclick=function(){press(t);};
+    if(t==='1'){ // the balloon is its own button above the key, so it never eats a 1
+      var h=document.createElement('button'); h.className='hcharm'; h.setAttribute('aria-label','For him');
+      h.innerHTML='<svg viewBox="0 0 24 46"><g class="hb"><path class="hp" d="M12 20.5s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.6a4.3 4.3 0 0 1 7.5 2.7c0 5.6-7.5 10.2-7.5 10.2z"/><path class="hk" d="M10.9 22.4h2.2L12 20.6z"/></g><path class="hs" d="M12 22.4C14.8 28 9.2 34 12 46"/></svg>';
+      h.onclick=function(ev){ev.stopPropagation();toggleHim();};
+      b.appendChild(h);
+    }
+    k.appendChild(b);
   });
 }
-function burst(em){
-  for(var i=0;i<6;i++){
-    var s=document.createElement('span');s.className='pop';s.textContent=em;
+function toggleHim(){ document.body.classList.toggle('him'); if(navigator.vibrate) navigator.vibrate(10); }
+function burst(em,n){ // em: one emoji, or a list to mix
+  for(var i=0;i<(n||6);i++){
+    var s=document.createElement('span');s.className='pop';s.textContent=Array.isArray(em)?em[i%em.length]:em;
     s.style.setProperty('--dx',(Math.random()*160-80)+'px');
     s.style.setProperty('--dy',(-40-Math.random()*110)+'px');
     document.body.appendChild(s);
@@ -753,6 +864,7 @@ function burst(em){
 }
 
 function press(t){
+  if(lastRef&&!lastPick) hideLast(); // typing the next amount = moved on
   if(t==='⌫'){ amt=amt.slice(0,-1); }
   else if(t==='.'){ if(amt.indexOf('.')<0) amt=(amt===''?'0':amt)+'.'; }
   else {
@@ -793,25 +905,53 @@ function logExpense(cat,sub,el){
   if(sub) entry.sub=sub.n;
   if(fxOn()) entry.fx={c:cfg.fx.c, a:typed, r:cfg.fx.r};
   if(activeTrip()) entry.trip=cfg.tripOn;
+  if(document.body.classList.contains('him')){ entry.tag='him'; document.body.classList.remove('him'); } // one entry at a time
   entries.push(entry);
   save(KEY,entries);
+  try{ localStorage.setItem(LASTLOG_KEY,entry.id); }catch(_){}
   save(CKEY,cfg); // what she logged with becomes the starting point for a category it hasn't learned yet
   manualSel.method=false; manualSel.need=false;
   amt=''; renderAmt(); if(noteEl){noteEl.value='';noteEl.blur();} renderTotals(); 
   if(el){ el.classList.add('flash'); setTimeout(function(){el.classList.remove('flash');},220); }
-  burst(em); renderCats(); renderCur();
+  if(entry.tag==='him'){ burst(['💗','✨','💗','💕','✨','💗'],10); var hc=document.querySelector('.hcharm'); if(hc){hc.classList.remove('hop');void hc.offsetWidth;hc.classList.add('hop');setTimeout(function(){hc.classList.remove('hop');},650);} }
+  else burst(em);
+  renderCats(); renderCur();
   if(navigator.vibrate) navigator.vibrate(15);
   showLast(entry, firstToday&&streak()>=2 ? ' · 🔥 day '+streak() : '');
 }
+/* Undo takes back what she last LOGGED. entries is sorted by date after a
+   sync or an edit, so the old pop() could take a future installment part
+   instead. No log remembered → the newest entry that isn't in the future. */
+var LASTLOG_KEY='xpense_lastlog_v1', undone=null;
 function undoLast(){
-  if(!entries.length){toast('Nothing to undo');return;}
-  var e=entries.pop(); tombstone(e); save(KEY,entries); hideLast(); renderTotals(); 
-  toast('Removed RM '+fmt2(e.amt)+' · '+catLabel(e));
+  var id=null; try{ id=localStorage.getItem(LASTLOG_KEY); }catch(_){}
+  var i=id?entries.findIndex(function(x){return x.id===id;}):-1;
+  if(i<0){ var now=Date.now(), best=null;
+    entries.forEach(function(x,j){ if(new Date(x.ts).getTime()<=now&&(best==null||x.ts>=entries[best].ts)) best=j; });
+    i=best==null?-1:best; }
+  if(i<0){toast('Nothing to undo');return;}
+  var e=entries.splice(i,1)[0]; tombstone(e); save(KEY,entries); hideLast(); renderTotals();
+  try{ localStorage.removeItem(LASTLOG_KEY); }catch(_){}
+  undone=e;
+  var t=document.getElementById('toast');
+  t.innerHTML='<span>Removed RM '+fmt2(e.amt)+' · '+esc(catLabel(e))+'</span><button onclick="redoUndo()">Bring back</button>';
+  t.classList.add('show','act');
+  clearTimeout(toastT); toastT=setTimeout(function(){t.classList.remove('show');setTimeout(function(){t.classList.remove('act');},260);undone=null;},5000);
+}
+function redoUndo(){
+  var e=undone; if(!e) return; undone=null;
+  untomb(entryKey(e)); e.u=Date.now(); entries.push(e);
+  entries.sort(function(a,b){return a.ts<b.ts?-1:1;});
+  save(KEY,entries); renderTotals(); renderCats();
+  try{ localStorage.setItem(LASTLOG_KEY,e.id); }catch(_){}
+  var t=document.getElementById('toast'); t.classList.remove('act'); toast('Back · RM '+fmt2(e.amt)+' · '+catLabel(e));
+  if(currentSheet&&document.getElementById('sheet').classList.contains('open')) openSheet(currentSheet);
 }
 
 var lastT=null, lastRef=null, lastExtra='';
 function showLast(e,extra){
   lastRef=e; lastExtra=extra||'';
+  var hd=document.querySelector('header'); if(hd) document.getElementById('last').style.setProperty('--lastTop',(hd.getBoundingClientRect().bottom+6)+'px');
   renderLast();
   document.getElementById('last').classList.add('show');
   armLast();
@@ -851,9 +991,12 @@ function renderLast(){
     '<div class="lchips">'+
     '<button class="lchip '+(e.need==='need'?'n-on':'w-on')+'" onclick="lastFlipNeed()">'+(e.need==='need'?'Need':'Want')+' ⇄</button>'+
     '<button class="lchip" onclick="lastCycleMethod()">'+esc(e.method)+' ⇄</button>'+
-    '<button class="lchip'+(lastPick?' cat-on':'')+'" onclick="lastOpenCat()">'+e.e+' '+esc(shortLabel(e))+' ⇄</button>'+
+    '<button class="lchip lcat'+(lastPick?' cat-on':'')+'" onclick="lastOpenCat()">'+e.e+' '+esc(shortLabel(e))+' ⇄</button>'+
+    '<button class="lchip lh'+(e.tag==='him'?' h-on':'')+'" aria-label="For him" onclick="lastFlipHim()">'+(e.tag==='him'?'💗':'♡')+'</button>'+
     (lastPick?'':'<span class="lhint">tap to fix</span>')+'</div>'+
     lastPickHtml(e);
+  var hint=document.querySelector('#last .lhint'); // the 💗 chip took its room on a narrow phone: drop the hint, never half of it
+  if(hint&&hint.scrollWidth>hint.clientWidth+1) hint.style.display='none';
 }
 function lastPickHtml(e){
   if(!lastPick) return '';
@@ -868,6 +1011,14 @@ function lastPickHtml(e){
   });
   if(g.n===CATCH) chips.push('<button class="lchip'+(e.cat===CATCH&&e.sub===CATCH?' cur':'')+'" onclick="lastSetSub('+gi+',-1)">'+g.e+' '+CATCH+'</button>');
   return '<div class="lpick"><button class="lchip" onclick="lastGroups()">‹ All</button>'+chips.join('')+'</div>';
+}
+/* forgot the balloon before logging — or tapped it by mistake */
+function lastFlipHim(){
+  if(!lastRef)return;
+  if(lastRef.tag==='him') delete lastRef.tag; else lastRef.tag='him';
+  lastRef.u=Date.now(); save(KEY,entries);
+  renderLast(); armLast();
+  if(currentSheet&&document.getElementById('sheet').classList.contains('open')) openSheet(currentSheet);
 }
 function lastFlipNeed(){
   if(!lastRef)return;
@@ -887,7 +1038,7 @@ function lastCycleMethod(){
 
 var toastT;
 function toast(msg){
-  var t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');
+  var t=document.getElementById('toast');t.classList.remove('act');t.textContent=msg;t.classList.add('show');
   clearTimeout(toastT);toastT=setTimeout(function(){t.classList.remove('show');},1400);
 }
 
@@ -898,6 +1049,7 @@ function openSheet(kind){
   // redrawing the sheet that's already open (adding a sub, removing one…) keeps her place
   var keep=(kind===currentSheet&&document.getElementById('sheet').classList.contains('open'))?body.scrollTop:0;
   if(kind==='recent') body.innerHTML=recentHtml();
+  else if(kind==='us') body.innerHTML=usHtml();
   else if(kind==='break') body.innerHTML=breakHtml();
   else if(kind==='day') body.innerHTML=dayHtml(dayKey);
   else if(kind==='drill') body.innerHTML=drillHtml();
@@ -949,7 +1101,7 @@ function recentHtml(){
   }
   var rows=list.map(function(e){
     var d=new Date(e.ts);
-    return '<div class="row rowc" onclick="openEdit(\''+e.id+'\')"><div class="l"><span class="e">'+e.e+'</span><div>'+esc(catLabel(e))+(e.note?' · '+esc(e.note):'')+
+    return '<div class="row rowc" onclick="openEdit(\''+e.id+'\')"><div class="l"><span class="e">'+e.e+'</span><div>'+esc(catLabel(e))+(e.note?' · '+esc(e.note):'')+(e.tag==='him'?'<span class="rheart">💗</span>':'')+
       '<small>'+d.toLocaleDateString('en-GB',{day:'numeric',month:'short'})+' '+d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})+
       ' · '+e.method+' · '+(e.need==='need'?'Need':'Want')+fxTag(e)+'</small></div></div>'+
       '<div class="l"><b class="num">RM '+fmt(e.amt)+'</b></div></div>';
@@ -988,13 +1140,46 @@ function subSplit(list){
   var m={}; list.forEach(function(e){ var k=e.sub||''; m[k]=(m[k]||0)+e.amt; });
   return Object.keys(m).sort(function(a,b){return m[b]-m[a];}).map(function(k){return [k,m[k]];});
 }
+/* Us: every 💗 entry, all months, as a little diary — the notes are the
+   memories, the money is the small print. Dates are hers (met / together). */
+var US={met:'2022-08-18', dated:'2023-05-20'};
+function usDays(){ var a=new Date(US.dated+'T00:00:00'), t=new Date(); t.setHours(0,0,0,0); return Math.round((t-a)/864e5); }
+function usNext(){ // next 20 May (or today)
+  var t=new Date(); t.setHours(0,0,0,0); var d=new Date(US.dated+'T00:00:00'), y=t.getFullYear();
+  var n=new Date(y,d.getMonth(),d.getDate()); if(n<t) n=new Date(y+1,d.getMonth(),d.getDate());
+  return {days:Math.round((n-t)/864e5), years:n.getFullYear()-d.getFullYear()};
+}
+function usHtml(){
+  var now=Date.now(), list=entries.filter(function(e){return e.tag==='him'&&new Date(e.ts).getTime()<=now;})
+    .sort(function(a,b){return a.ts<b.ts?1:-1;});
+  var nx=usNext(), ord=function(n){return n+(n%10===1&&n%100!==11?'st':n%10===2&&n%100!==12?'nd':n%10===3&&n%100!==13?'rd':'th');};
+  var met=new Date(US.met+'T00:00:00'), dat=new Date(US.dated+'T00:00:00');
+  var hero='<div class="usHero"><span class="tw" style="top:12px;left:18px">✦</span><span class="tw" style="top:26px;right:22px;animation-delay:1.1s">✦</span><span class="tw" style="bottom:14px;left:40px;animation-delay:2s">✦</span>'+
+    '<div class="ush">'+usDays().toLocaleString('en-GB')+' days <i>together</i></div>'+
+    '<div class="usd">met '+met.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})+' · dating since '+dat.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})+'</div>'+
+    '<div class="usn">'+(nx.days===0?'💗 happy '+ord(nx.years)+' anniversary':ord(nx.years)+' anniversary in '+nx.days+' day'+(nx.days===1?'':'s'))+'</div></div>';
+  var byM={}, order=[];
+  list.forEach(function(e){ var k=entryMonth(e); if(!byM[k]){byM[k]=[];order.push(k);} byM[k].push(e); });
+  var body=order.map(function(k){
+    var es=byM[k], gifts=es.filter(function(e){return e.sub==='Gifts';}).length, other=es.length-gifts;
+    var bits=[]; if(other) bits.push(other+' together'); if(gifts) bits.push(gifts+' gift'+(gifts===1?'':'s'));
+    var tot=es.reduce(function(a,e){return a+e.amt;},0);
+    return '<div class="usM"><b>'+new Date(k+'-01T00:00:00').toLocaleDateString('en-GB',{month:'long',year:'numeric'})+'</b><span>'+bits.join(' · ')+' · RM '+fmt(tot)+'</span></div>'+
+      es.map(function(e){ var d=new Date(e.ts);
+        return '<div class="usCard" onclick="openEdit(\''+e.id+'\')"><div class="usDay"><b>'+d.getDate()+'</b><small>'+d.toLocaleDateString('en-GB',{weekday:'short'})+'</small></div>'+
+          '<div class="usBody"><div class="usn2">'+esc(e.note||shortLabel(e))+'</div><small>'+e.e+' '+esc(catLabel(e))+'</small></div>'+
+          '<div class="usAmt num">RM '+fmt(e.amt)+'</div></div>'; }).join('');
+  }).join('') || '<div class="mini" style="margin-top:18px">Tap the 💗 balloon before logging a date or a gift — it lands here, with your note as the memory.</div>';
+  return '<h2>💗 Us<button class="x back" onclick="openSheet(\'break\')">‹ Back</button></h2>'+hero+body+
+    (list.length?'<div class="mini">Tap one to edit · notes become the memories</div>':'');
+}
 function drillHtml(){
   if(!drill) return '<div class="mini">—</div>';
   var f=drill.f, v=drill.v, sb=drill.s;
   var list=monthOf(insKey()).filter(function(e){return (e[f]||'')===v && (sb==null||(e.sub||'')===sb);})
     .sort(function(a,b){return a.ts<b.ts?1:-1;});
   var tot=list.reduce(function(s,e){return s+e.amt;},0);
-  var title=f==='need' ? (v==='need'?'🟢 Need (essential)':'🟠 Want (could cut)')
+  var title=f==='tag' ? '💗 For him' : f==='need' ? (v==='need'?'🟢 Need (essential)':'🟠 Want (could cut)')
           : esc(v)+(sb!=null?' › '+esc(sb||'no sub'):'');
   var split='';
   if(f==='cat'&&sb==null){
@@ -1027,7 +1212,7 @@ function toLocalInput(ts){
 }
 
 var editId=null;
-function openEdit(id){ editId=id; editBack=(['day','drill','refile','break'].indexOf(currentSheet)>=0?currentSheet:'recent'); openSheet('edit'); }
+function openEdit(id){ editId=id; editBack=(['day','drill','refile','break','us'].indexOf(currentSheet)>=0?currentSheet:'recent'); openSheet('edit'); }
 var CSEP='\u0001'; // group/sub separator inside a <select> value
 function catOptions(e){
   var cur=e.cat+CSEP+(e.sub||''), seen=false;
@@ -1061,6 +1246,8 @@ function editHtml(id){
     '<div class="setrow"><select id="edMethod" style="flex:1;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px;font-size:14px;color:var(--ink)">'+mOpts+'</select></div>'+
     '<div class="bdh">Need or want</div>'+
     '<div class="seg need" id="edNeed"><button data-v="need" class="'+(e.need==='need'?'on':'')+'">Need</button><button data-v="want" class="'+(e.need==='want'?'on':'')+'">Want</button></div>'+
+    '<div class="bdh">For him</div>'+
+    '<div class="seg" id="edHim"><button data-v="him" class="'+(e.tag==='him'?'on':'')+'">💗 For him</button><button data-v="no" class="'+(e.tag==='him'?'':'on')+'">No</button></div>'+
     '<div class="bdh">Note</div>'+
     '<div class="setrow"><input id="edNote" value="'+esc(e.note||'')+'" placeholder="note (optional)"></div>'+
     '<button class="copybtn" onclick="saveEdit(\''+id+'\')">Save</button>'+
@@ -1107,6 +1294,7 @@ function splitInstallments(id){
       need:e.need, note:(note?note+' ':'')+(i+1)+'/'+n, ts:addMonths(base,i).toISOString(), u:Date.now(),
       inst:{g:gid, i:i+1, n:n, tot:tot, d:firstTs, desc:desc}};
     if(e.sub) part.sub=e.sub;
+    if(e.tag) part.tag=e.tag;
     rows.push(part);
   }
   /* The lump sum is gone everywhere, not just here — without this the other
@@ -1121,10 +1309,12 @@ function splitInstallments(id){
   openSheet(editBack);
 }
 function wireEdit(id){
-  var seg=document.getElementById('edNeed');
-  if(seg) seg.addEventListener('click',function(ev){
-    if(!ev.target.dataset.v)return;
-    seg.querySelectorAll('button').forEach(function(b){b.classList.toggle('on',b===ev.target);});
+  ['edNeed','edHim'].forEach(function(sid){
+    var seg=document.getElementById(sid);
+    if(seg) seg.addEventListener('click',function(ev){
+      if(!ev.target.dataset.v)return;
+      seg.querySelectorAll('button').forEach(function(b){b.classList.toggle('on',b===ev.target);});
+    });
   });
 }
 function saveEdit(id){
@@ -1141,6 +1331,8 @@ function saveEdit(id){
   var tEl=document.getElementById('edTrip'); if(tEl){ if(tEl.value) e.trip=tEl.value; else delete e.trip; }
   var needBtn=document.querySelector('#edNeed button.on');
   e.need=needBtn?needBtn.dataset.v:e.need;
+  var himBtn=document.querySelector('#edHim button.on');
+  if(himBtn){ if(himBtn.dataset.v==='him') e.tag='him'; else delete e.tag; }
   /* the other months of the same installment follow (amount and date stay
      their own) — otherwise re-filing a 12-month plan is 12 edits */
   var allEl=document.getElementById('edAll'), moved=0;
@@ -1149,7 +1341,7 @@ function saveEdit(id){
     plan.forEach(function(x){
       if(x===e) return;
       x.cat=e.cat; if(e.sub) x.sub=e.sub; else delete x.sub; x.e=e.e;
-      x.method=e.method; x.need=e.need; if(e.trip) x.trip=e.trip; else delete x.trip;
+      x.method=e.method; x.need=e.need; if(e.trip) x.trip=e.trip; else delete x.trip; if(e.tag) x.tag=e.tag; else delete x.tag;
       x.u=now; moved++;
     });
   }
@@ -1411,7 +1603,19 @@ function trendHtml(){
     '<div class="bdh">Everyday, month by month · tap a bar</div>'+chart+moved+
     (bigRows?'<div class="bdh">One-offs &amp; installments · kept out of the trend</div>'+bigRows:'')+
     '<div class="bdh">Need share · last 6 months</div>'+needRow+
-    (top?'<div class="bdh">'+yr+' so far · RM '+fmt(ytdTot)+'</div>'+top:'')+inst;
+    (top?'<div class="bdh">'+yr+' so far · RM '+fmt(ytdTot)+'</div>'+top:'')+himTrend()+inst;
+}
+/* One quiet line in Trends: this year for him, and what a month of him
+   usually is (averaged from the first month she used the heart). */
+function himTrend(){
+  var yr=String(new Date().getFullYear()), now=Date.now();
+  var hl=entries.filter(function(e){return e.tag==='him'&&entryMonth(e).slice(0,4)===yr&&new Date(e.ts).getTime()<=now;});
+  if(!hl.length) return '';
+  var t=hl.reduce(function(a,e){return a+e.amt;},0), ms={};
+  hl.forEach(function(e){ms[entryMonth(e)]=1;});
+  var d0=new Date(Object.keys(ms).sort()[0]+'-01T00:00:00'), td=new Date();
+  var n=(td.getFullYear()-d0.getFullYear())*12+td.getMonth()-d0.getMonth()+1;
+  return '<div class="himrow" onclick="openSheet(\'us\')"><span class="hh">💗</span><div class="hm"><b>For him · '+yr+'</b><small>about RM '+fmt(t/n)+' a month · '+hl.length+' log'+(hl.length===1?'':'s')+'</small></div><span class="ha num">RM '+fmt(t)+'</span></div>';
 }
 function tripsHtml(){
   function sum(a,e){return a+e.amt;}
@@ -1556,11 +1760,13 @@ function breakHtml(){
     return '<div class="row rowc" onclick="openDrill(\'method\',\''+jsq(k)+'\')"><div class="l">'+esc(k)+'</div><b class="num">RM '+fmt(gm[k])+'</b></div>';
   }).join('')||'<div class="mini">—</div>';
 
+  var hm=mo.filter(function(e){return e.tag==='him';}), hTot=hm.reduce(sum,0), hP=pm.filter(function(e){return e.tag==='him';}).reduce(sum,0);
+  var himRow=hm.length?'<div class="himrow" onclick="openSheet(\'us\')"><span class="hh">💗</span><div class="hm"><b>For him</b><small>'+hm.length+' log'+(hm.length===1?'':'s')+(hP?' · '+pName+' RM '+fmt(hP):'')+' · our diary ›</small></div><span class="ha num">RM '+fmt(hTot)+'</span></div>':'';
   return insTabs()+
     '<div class="imh"><button class="x mnav"'+(hasOlder?' onclick="insShift(-1)"':' disabled')+'>‹</button>'+
       '<span class="mname">'+md.toLocaleDateString('en-GB',{month:'long',year:'numeric'})+'</span>'+
       '<button class="x mnav"'+(cur?' disabled':' onclick="insShift(1)"')+'>›</button></div>'+
-    hero+
+    hero+himRow+
     '<div class="bdh">Where it went · tap to see inside</div>'+catRows+
     (tot?'<div class="bdh">Need vs want</div>'+nw:'')+
     (big?'<div class="bdh">Biggest spends</div>'+big:'')+
@@ -1585,6 +1791,16 @@ function copyMonth(){
   else toast('Copy: '+txt);
 }
 
+/* which long lists are unfolded — kept across redraws (adding a sub redraws the sheet) */
+var setOpen={lim:false,cats:false};
+function setFold(k){ setOpen[k]=!setOpen[k]; var b=document.getElementById('sb-'+k), h=document.getElementById('sf-'+k);
+  if(b) b.classList.toggle('on',setOpen[k]); if(h) h.classList.toggle('on',setOpen[k]); }
+function setJump(k){
+  if(k==='lim'&&!setOpen.lim) setFold('lim');
+  if(k==='cats'&&!setOpen.cats) setFold('cats');
+  var el=document.getElementById('s-'+k), box=document.getElementById('sheetBody');
+  if(el&&box) box.scrollTo({top:el.getBoundingClientRect().top-box.getBoundingClientRect().top+box.scrollTop-56,behavior:'smooth'});
+}
 function setHtml(){
   var catRows=cfg.cats.map(function(c,i){
     return '<div class="setrow" style="margin-top:10px"><input data-t="cat" data-i="'+i+'" data-f="e" value="'+esc(c.e)+'" style="flex:0 0 48px;text-align:center">'+
@@ -1602,15 +1818,20 @@ function setHtml(){
     return '<div class="setrow"><input data-t="method" data-i="'+i+'" value="'+esc(m)+'">'+
       '<button class="del" onclick="rmMethod('+i+')">✕</button></div>';
   }).join('');
+  var nLim=cfg.cats.filter(function(g){return limitOf(g.n);}).length, nSubs=cfg.cats.reduce(function(a,g){return a+g.subs.length;},0);
+  var jumps=[['budget','Budget'],['lim','Limits'],['travel','Travel'],['acc','Accounts'],['cats','Groups'],['sync','Sync'],['data','Data']];
   return '<h2>Settings<button class="x" onclick="closeSheet()">✕</button></h2>'+
-    '<div class="bdh">Monthly budget (RM)</div>'+
+    '<div class="sjump">'+jumps.map(function(j){return '<button onclick="setJump(\''+j[0]+'\')">'+j[1]+'</button>';}).join('')+'</div>'+
+    '<div class="bdh" id="s-budget">Monthly budget (RM)</div>'+
     '<div class="setrow"><input id="budgetInp" type="number" inputmode="numeric" value="'+(cfg.budget||'')+'" placeholder="e.g. 8000"></div>'+
-    '<div class="bdh">Monthly limit per group · leave blank for none</div>'+
+    '<div class="bdh" id="s-lim">Limits per group</div>'+
+    '<div class="sfold'+(setOpen.lim?' on':'')+'" id="sf-lim" onclick="setFold(\'lim\')"><span>🎯</span><div>Monthly limit per group<small>'+(nLim?nLim+' set':'none set')+' · leave blank for none</small></div><span class="chev">›</span></div>'+
+    '<div class="sbody'+(setOpen.lim?' on':'')+'" id="sb-lim">'+
     cfg.cats.map(function(g){
       return '<div class="setrow"><span style="flex:1;font-size:14px">'+g.e+' '+esc(g.n)+'</span>'+
         '<span style="font-size:13px;color:var(--ink3)">RM</span><input data-lim="'+esc(g.n)+'" type="number" inputmode="numeric" value="'+(limitOf(g.n)||'')+'" placeholder="—" style="flex:0 0 96px;text-align:right"></div>';
-    }).join('')+
-    '<div class="bdh">Travel currency</div>'+
+    }).join('')+'</div>'+
+    '<div class="bdh" id="s-travel">Travel currency</div>'+
     '<div class="setrow"><select id="fxCur" style="flex:1;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px;font-size:14px;color:var(--ink)">'+
       '<option value="">None</option>'+Object.keys(CURS).map(function(c){return '<option value="'+c+'"'+(cfg.fx&&cfg.fx.c===c?' selected':'')+'>'+CURS[c]+' '+c+'</option>';}).join('')+'</select></div>'+
     (cfg.fx&&cfg.fx.c?'<div class="setrow"><span style="font-size:14px;color:var(--ink2);white-space:nowrap">1 '+esc(cfg.fx.c)+' = RM</span>'+
@@ -1620,13 +1841,14 @@ function setHtml(){
     (activeTrip()?'<div class="setrow"><span style="font-size:14px;color:var(--ink2)">✈️ Trip</span><input id="tripName" value="'+esc(activeTrip().name)+'">'+
       '<button class="copybtn" style="margin-top:0;width:auto;padding:10px 14px;background:var(--card2);color:var(--blush)" onclick="endTrip()">End trip</button></div>'+
       '<div class="mini" style="text-align:left">Everything you log is tagged to this trip until you end it — in RM or '+esc(cfg.fx?cfg.fx.c:'')+'. Earlier entries (flights, hotel) can be tagged from their edit screen.</div>':'')+
-    '<div class="bdh">Payment accounts</div>'+methodRows+
+    '<div class="bdh" id="s-acc">Payment accounts</div>'+methodRows+
     '<div class="setrow"><button class="copybtn" style="margin-top:0" onclick="addMethod()">+ Add account</button></div>'+
-    '<div class="bdh">Categories · renaming moves past entries too</div>'+
+    '<div class="bdh" id="s-cats">Categories</div>'+
     (nRefile?'<div class="row rowc" onclick="openSheet(\'refile\')"><div class="l"><span class="e">🗂️</span><div>'+nRefile+' entr'+(nRefile===1?'y':'ies')+' to re-file<small>Others, and groups logged without a sub</small></div></div><b>›</b></div>':'')+
-    catRows+
-    '<div class="setrow" style="margin-top:10px"><button class="copybtn" style="margin-top:0" onclick="addCat()">+ Add group</button></div>'+
-    '<div class="bdh">Cloud sync (GitHub)</div>'+
+    '<div class="sfold'+(setOpen.cats?' on':'')+'" id="sf-cats" onclick="setFold(\'cats\')"><span>🗂️</span><div>Edit groups &amp; sub-categories<small>'+cfg.cats.length+' groups · '+nSubs+' subs · renaming moves past entries too</small></div><span class="chev">›</span></div>'+
+    '<div class="sbody'+(setOpen.cats?' on':'')+'" id="sb-cats">'+catRows+
+    '<div class="setrow" style="margin-top:10px"><button class="copybtn" style="margin-top:0" onclick="addCat()">+ Add group</button></div></div>'+
+    '<div class="bdh" id="s-sync">Cloud sync (GitHub)</div>'+
     (cfg.ghToken
       ? '<div class="mini" style="text-align:left;margin:4px 0 0">☁️ '+syncStatus()+' · auto-backs up after every change</div>'+
         '<div class="setrow"><button class="copybtn" style="margin-top:0" onclick="pullSync(true)">Sync now</button>'+
@@ -1636,7 +1858,7 @@ function setHtml(){
         '<div class="setrow"><input id="ghPass" type="password" placeholder="Passphrase (optional — encrypts cloud copy)" autocomplete="off"></div>'+
         '<div class="setrow"><button class="copybtn" style="margin-top:0" onclick="connectSync()">Connect</button></div>'+
         '<div class="mini" style="text-align:left">github.com → Settings → Developer settings → Personal access tokens (classic) → Generate, tick only <b>gist</b>. Data auto-backs up to a private Gist; paste the same token (and passphrase) on any device to restore. Keep both in your password manager / Notes — a lost passphrase makes the cloud copy unreadable.</div>')+
-    '<div class="bdh">Data</div>'+
+    '<div class="bdh" id="s-data">Data</div>'+
     (function(){ // each browser/phone keeps its own copy — say which one this is holding
       var now=Date.now(), past=entries.filter(function(e){return new Date(e.ts).getTime()<=now;});
       var last=past.length?new Date(past[past.length-1].ts).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):'—';
@@ -2294,6 +2516,7 @@ function doImport(txt,replace){
     if(e.inst&&e.inst.g) row.inst=e.inst; // keep installment tags across a backup restore
     if(e.fx&&e.fx.c) row.fx=e.fx;
     if(e.trip) row.trip=e.trip;
+    if(e.tag) row.tag=e.tag;
     entries.push(row);
     added++;
   });
