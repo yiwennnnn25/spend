@@ -205,6 +205,12 @@
   .gl-tile small{display:block;font-size:10.5px;color:var(--ink2);line-height:1.4;transition:filter .2s}
   .gl-hush b,.gl-hush small{filter:blur(6px)}
   .gl-dot{width:7px;height:7px;border-radius:50%;flex:none;margin-top:6px}
+  .gl-tabs{margin:-4px 0 12px}
+  .gl-pin{width:100%;text-align:center;font-size:24px;letter-spacing:.5em;background:var(--card);border:1px solid var(--line);border-radius:13px;padding:10px;color:var(--ink);margin:8px 0}
+  .gl-up{color:var(--need)} .gl-dn{color:var(--blush)}
+  .gl-lot{font-size:11.5px;color:var(--ink2);padding:2px 0 8px 2px;line-height:1.6}
+  .gl-leg{display:flex;flex-wrap:wrap;gap:10px;font-size:11px;color:var(--ink2);margin-top:6px}
+  .gl-leg i{display:inline-block;width:9px;height:3px;border-radius:2px;margin-right:4px;vertical-align:middle}
   @media (prefers-reduced-motion:reduce){.gl-bar i{animation:none}}
   .nudge{margin:0 16px 7px;background:var(--want-bg);border:1px solid var(--line);border-radius:12px;
     padding:9px 12px;font-size:12px;color:var(--ink);display:none;cursor:pointer;box-shadow:var(--shadow);text-align:center}
@@ -461,7 +467,7 @@
 
 <script>
 "use strict";
-var APP_VERSION='2026-10-09c'; /*APPVER:2026-10-09c*/
+var APP_VERSION='2026-10-09e'; /*APPVER:2026-10-09e*/
 /* Categories are groups with optional sub-categories. An entry stores the
    group in `cat` (so every total, and the suite reading the gist, still
    rolls up by group) and the sub in `sub`. A group with no subs logs
@@ -2512,10 +2518,144 @@ function glAgo(iso){
 }
 function glRM(v){ return 'RM '+Math.round(v).toLocaleString('en-MY'); }
 function glPct(r){ return (r>=0?'+':'−')+Math.abs(r*100).toFixed(1)+'%'; }
+/* ---- Holdings + Wealth tabs, behind a PIN (2026-10-09) -----------------
+   The detail she can't see away from the laptop: every AOS position with
+   AOS's own cost and gain, and Wealth OS's monthly ledger as a trend.
+   The PIN is a curtain, not encryption — like Wealth OS's passcode: it
+   keeps a casual look at her phone out. Asked again whenever Spend has
+   been in the background over a minute. Forgot it: the cloud passphrase
+   resets it. ------------------------------------------------------------ */
+var GLPIN='xpense_glance_pin_v1', glUnlocked=false, glHiddenAt=0;
+document.addEventListener('visibilitychange',function(){
+  if(document.visibilityState==='hidden') glHiddenAt=Date.now();
+  else if(glHiddenAt&&Date.now()-glHiddenAt>60e3){ glUnlocked=false; glanceRedraw(); }
+});
+function glPinGet(){ try{ return JSON.parse(localStorage.getItem(GLPIN)||'null'); }catch(e){ return null; } }
+function glHash(pin,salt){
+  return crypto.subtle.digest('SHA-256',new TextEncoder().encode(salt+'·'+pin)).then(function(b){ return b64(b); });
+}
+function glPinSubmit(){
+  var a=(document.getElementById('glPinA')||{}).value||'', b=(document.getElementById('glPinB')||{}).value;
+  var cur=glPinGet();
+  if(!/^\d{4,6}$/.test(a)){ toast('4 to 6 digits'); return; }
+  if(!cur){
+    if(a!==b){ toast('The two PINs don\'t match'); return; }
+    var salt=b64(crypto.getRandomValues(new Uint8Array(12)));
+    glHash(a,salt).then(function(h){ localStorage.setItem(GLPIN,JSON.stringify({salt:salt,hash:h})); glUnlocked=true; glanceRedraw(); toast('PIN set'); });
+    return;
+  }
+  glHash(a,cur.salt).then(function(h){
+    if(h===cur.hash){ glUnlocked=true; glanceRedraw(); }
+    else { toast('Wrong PIN'); var e=document.getElementById('glPinA'); if(e){ e.value=''; e.focus(); } }
+  });
+}
+function glPinReset(){
+  var p=prompt('Your cloud passphrase (the one in ⚙ → Cloud sync) resets the PIN:');
+  if(p==null) return;
+  if(p&&p===cfg.syncPass){ localStorage.removeItem(GLPIN); glUnlocked=false; glanceRedraw(); toast('PIN cleared — set a new one'); }
+  else toast('That isn\'t the passphrase');
+}
+function glLockHtml(){
+  var cur=glPinGet();
+  return '<div class="gl-hero" style="text-align:center">'+
+    '<div class="gl-k">'+(cur?'Holdings and Wealth are locked':'Set a PIN for Holdings and Wealth')+'</div>'+
+    '<input id="glPinA" class="gl-pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" placeholder="PIN" onkeydown="if(event.key===\'Enter\')glPinSubmit()">'+
+    (cur?'':'<input id="glPinB" class="gl-pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" placeholder="again" onkeydown="if(event.key===\'Enter\')glPinSubmit()">')+
+    '<button class="copybtn" onclick="glPinSubmit()">'+(cur?'Unlock':'Set PIN')+'</button>'+
+    (cur?'<div class="mini"><a href="#" onclick="glPinReset();return false" style="color:var(--lav)">Forgot it?</a></div>':
+         '<div class="mini">4–6 digits. Asked again after Spend has been away for a minute.</div>')+
+    '</div>';
+}
+function glMoney(v){ return (v<0?'−':'')+'RM\u00a0'+Math.abs(Math.round(v)).toLocaleString('en-MY'); }
+function glSigned(v){ return (v>=0?'+':'−')+'RM\u00a0'+Math.abs(Math.round(v)).toLocaleString('en-MY'); }
+function glPx(v,ccy){ if(v==null) return '—'; var d=v>=100?2:v>=1?2:4; return (ccy==='USD'?'$':ccy==='GBP'?'£':ccy==='MYR'?'RM ':'')+v.toFixed(d); }
+function glSpark(pts,w,hgt,colour){
+  if(!pts||pts.length<2) return '';
+  var lo=Math.min.apply(null,pts), hi=Math.max.apply(null,pts), r=(hi-lo)||1;
+  return pts.map(function(v,i){ return (i?'L':'M')+(i/(pts.length-1)*w).toFixed(1)+' '+(hgt-4-(v-lo)/r*(hgt-8)).toFixed(1); }).join(' ');
+}
+var glOpenT={};
+function glHoldHtml(aos){
+  var lots=aos.holdings||[];
+  if(!lots.length) return '<div class="mini">No holdings from your Mac yet — open Allocation OS on the laptop once.</div>';
+  var by={}, order=[];
+  lots.forEach(function(l){ if(!by[l.t]){ by[l.t]={t:l.t,n:l.n,role:l.role||'Other',ccy:l.ccy,lots:[],v:0,cost:0,pnl:0,costKnown:true,sh:0,avgSum:0}; order.push(l.t); }
+    var g=by[l.t]; g.lots.push(l); g.v+=l.v; g.sh+=l.sh; g.avgSum+=l.avg*l.sh;
+    if(l.cost==null||l.pnl==null) g.costKnown=false; else { g.cost+=l.cost; g.pnl+=l.pnl; } });
+  var tot=0, cost=0, pnl=0;
+  order.forEach(function(t){ var g=by[t]; tot+=g.v; if(g.costKnown){ cost+=g.cost; pnl+=g.pnl; } });
+  var roles={}, rorder=[];
+  order.forEach(function(t){ var g=by[t]; if(!roles[g.role]){ roles[g.role]={v:0,names:[]}; rorder.push(g.role); } roles[g.role].v+=g.v; roles[g.role].names.push(g); });
+  rorder.sort(function(a,b){ return roles[b].v-roles[a].v; });
+  var nav=(aos.nav||[]).map(function(p){return p.v;});
+  var h='<div class="mini" style="text-align:left;margin:-6px 0 10px">Prices from '+glAgo(aos.pricesAt||aos.at)+' · as Allocation OS last saw them</div>'+
+    '<div class="gl-hero"><div class="gl-k">Portfolio</div><div class="gl-big" style="font-style:normal">'+glMoney(tot)+'</div>'+
+    '<div class="gl-sub">paid '+glMoney(cost)+' · <b class="'+(pnl>=0?'gl-up':'gl-dn')+'">'+glSigned(pnl)+(cost>0?' ('+(pnl>=0?'+':'−')+Math.abs(pnl/cost*100).toFixed(1)+'%)':'')+'</b></div>'+
+    '<div class="gl-sub">dividends this year '+glMoney(aos.divYear||0)+' · '+order.length+' names, '+lots.length+' lots</div>'+
+    (nav.length>1?'<svg viewBox="0 0 300 54" width="100%" height="54" style="margin-top:8px;display:block"><path d="'+glSpark(nav,300,54)+'" fill="none" stroke="#c79ad8" stroke-width="2" stroke-linejoin="round"/></svg><div class="mini" style="text-align:left;margin-top:0">value, last '+nav.length+' days</div>':'')+
+    '</div>';
+  rorder.forEach(function(r){
+    var R=roles[r];
+    h+='<div class="bdh">'+esc(r)+' · '+glMoney(R.v)+' · '+(tot?Math.round(R.v/tot*100):0)+'%</div>';
+    R.names.sort(function(a,b){return b.v-a.v;}).forEach(function(g){
+      var pct=g.costKnown&&g.cost>0?g.pnl/g.cost*100:null, open=glOpenT[g.t];
+      h+='<div class="row rowc" onclick="glOpenT[\''+esc(g.t).replace(/'/g,"\\'")+'\']=!glOpenT[\''+esc(g.t).replace(/'/g,"\\'")+'\'];glanceRedraw()">'+
+        '<div class="l"><div><b>'+esc(g.t)+'</b><small style="display:block;color:var(--ink3);font-size:11px;max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(g.n)+'</small></div></div>'+
+        '<div style="text-align:right"><b class="num">'+glMoney(g.v)+'</b><small style="display:block;font-size:11px" class="'+(pct==null?'':pct>=0?'gl-up':'gl-dn')+'">'+(pct==null?'—':(pct>=0?'+':'−')+Math.abs(pct).toFixed(1)+'%')+'</small></div></div>';
+      if(open){
+        var avg=g.sh?g.avgSum/g.sh:0, px=g.lots[0].px;
+        h+='<div class="gl-lot">'+(+g.sh.toFixed(4))+' units · avg '+glPx(avg,g.ccy)+' · now '+glPx(px,g.ccy)+' · '+(tot?(g.v/tot*100).toFixed(1):0)+'% of book'+
+           (g.costKnown?' · '+glSigned(g.pnl):'')+
+           (g.lots.length>1?'<br>'+g.lots.map(function(l){ return esc(l.pf||'—')+': '+(+l.sh.toFixed(4))+' @ '+glPx(l.avg,l.ccy)+' · '+glMoney(l.v); }).join('<br>'):(g.lots[0].pf?' · '+esc(g.lots[0].pf):''))+
+           (g.lots.some(function(l){return l.free;})?'<br>includes free shares':'')+'</div>';
+      }
+    });
+  });
+  return h;
+}
+function glWealthHtml(wos){
+  var hist=(wos.history||[]).slice().sort(function(a,b){return a.m<b.m?-1:1;});
+  if(!hist.length) return '<div class="mini">No history from your Mac yet — open Wealth OS on the laptop once.</div>';
+  var last=hist[hist.length-1], prev=hist[hist.length-2];
+  function mon(m){ var p=m.split('-'); return new Date(+p[0],+p[1]-1,1).toLocaleDateString('en-GB',{month:'short'}); }
+  var h='<div class="gl-hero"><div class="gl-k">Net worth · '+mon(last.m)+' log</div><div class="gl-big" style="font-style:normal">'+glMoney(last.nw)+'</div>'+
+    '<div class="gl-sub">'+(prev?'<b class="'+(last.nw>=prev.nw?'gl-up':'gl-dn')+'">'+glSigned(last.nw-prev.nw)+'</b> since '+mon(prev.m)+' · ':'')+'highest '+glMoney(Math.max(wos.nwHigh||0,last.nw))+'</div></div>';
+  var ser=[['nw','Net worth','#c79ad8'],['inv','Investments','#e39ab4'],['cash','Cash','#8fc7a8'],['liab','Liabilities','#d68a6e']];
+  var all=[]; hist.forEach(function(r){ ser.forEach(function(s){ all.push(r[s[0]]||0); }); });
+  var lo=Math.min(0,Math.min.apply(null,all)), hi=Math.max.apply(null,all)||1, W=300, H=140, n=hist.length;
+  function x(i){ return n<2?W/2:(i/(n-1))*W; } function y(v){ return H-6-(v-lo)/(hi-lo)*(H-12); }
+  var svg='<svg viewBox="0 0 '+W+' '+(H+14)+'" width="100%" style="display:block;margin-top:6px">'+
+    ser.map(function(s){ return '<path d="'+hist.map(function(r,i){ return (i?'L':'M')+x(i).toFixed(1)+' '+y(r[s[0]]||0).toFixed(1); }).join(' ')+'" fill="none" stroke="'+s[2]+'" stroke-width="'+(s[0]==='nw'?2.6:1.6)+'" stroke-linejoin="round"/>'; }).join('')+
+    hist.map(function(r,i){ return (i===0||i===n-1||i%3===0)?'<text x="'+x(i).toFixed(0)+'" text-anchor="'+(i===0?'start':i===n-1?'end':'middle')+'" y="'+(H+12)+'" font-size="9" fill="#8c7980">'+mon(r.m)+'</text>':''; }).join('')+'</svg>';
+  h+='<div class="bdh">Month by month</div>'+svg+'<div class="gl-leg">'+ser.map(function(s){ return '<span><i style="background:'+s[2]+'"></i>'+s[1]+'</span>'; }).join('')+'</div>';
+  var inc=(wos.income||[]).slice().sort(function(a,b){return a.m<b.m?-1:1;});
+  if(inc.length){
+    var top=Math.max.apply(null,inc.map(function(r){return r.sal+r.pas;}))||1, bw=W/inc.length;
+    h+='<div class="bdh">Income</div><svg viewBox="0 0 '+W+' 104" width="100%" style="display:block">'+inc.map(function(r,i){
+      var hs=r.sal/top*84, hp=r.pas/top*84, bx=(i*bw+bw*0.18).toFixed(1), w=(bw*0.64).toFixed(1);
+      return '<rect x="'+bx+'" y="'+(90-hs-hp).toFixed(1)+'" width="'+w+'" height="'+hp.toFixed(1)+'" rx="2" fill="#f8e08e"/>'+
+             '<rect x="'+bx+'" y="'+(90-hs).toFixed(1)+'" width="'+w+'" height="'+hs.toFixed(1)+'" rx="2" fill="#e39ab4"/>'+
+             ((i===0||i===inc.length-1||i%3===0)?'<text x="'+bx+'" y="102" font-size="9" fill="#8c7980">'+mon(r.m)+'</text>':'');
+    }).join('')+'</svg><div class="gl-leg"><span><i style="background:#e39ab4"></i>Salary</span><span><i style="background:#f8e08e"></i>Passive</span><span>'+mon(inc[inc.length-1].m)+': '+glMoney(inc[inc.length-1].sal+inc[inc.length-1].pas)+'</span></div>';
+  }
+  h+='<div class="bdh">Where it is · '+mon(last.m)+'</div>'+
+    [['Investments',last.inv],['Cash',last.cash],['Other assets',last.oth],['Liabilities',-last.liab]].map(function(r){
+      return '<div class="row"><div class="l">'+r[0]+'</div><b class="num">'+glMoney(r[1])+'</b></div>'; }).join('')+
+    (wos.epf?'<div class="row"><div class="l">EPF <small style="color:var(--ink3);margin-left:6px">outside net worth</small></div><b class="num">'+glMoney(wos.epf)+'</b></div>':'');
+  return h;
+}
+window.glPinSubmit=glPinSubmit;window.glPinReset=glPinReset;window.glOpenT=glOpenT;
+
 function glanceHtml(){
   var h='<h2>✦ Glance<button class="x" onclick="closeSheet()">✕</button></h2>';
-  var d=gl.data;
+  var d=gl.data, tab=gl.tab||'glance';
+  h+='<div class="seg gl-tabs">'+[['glance','Glance'],['hold','Holdings'],['wealth','Wealth']].map(function(t){
+    return '<button class="'+(tab===t[0]?'on':'')+'" onclick="gl.tab=\''+t[0]+'\';glanceRedraw()">'+t[1]+'</button>'; }).join('')+'</div>';
   if(!d){ return h+'<div class="mini">'+(gl.loading?'Fetching from your Mac…':esc(gl.err||''))+'</div>'; }
+  if(tab!=='glance'){
+    if(!glUnlocked) return h+glLockHtml();
+    return h+(tab==='hold'?glHoldHtml(d.aos||{}):glWealthHtml(d.wos||{}));
+  }
   var aos=d.aos||{}, wos=d.wos||{}, fi=wos.fi||{}, ms=d.monthStart;
   var ats=[aos.at,wos.at].filter(Boolean).sort();
   h+='<div class="mini" style="text-align:left;margin:-6px 0 10px">From your Mac · '+(ats.length?glAgo(ats[0]):'')+
@@ -2536,9 +2676,18 @@ function glanceHtml(){
      '<div class="gl-tile"><div class="gl-k">Left to invest, '+mon+'</div><b>'+(m?glRM(m.remaining):'—')+'</b><small>'+
        (m?'of '+glRM(m.budget)+' this month':'')+'</small></div></div>'+
      '<div class="mini" style="margin-top:4px">'+(gl.reveal?'tap to hide':'tap to show amounts')+'</div>';
-  var rows=(aos.needsYou||[]).map(function(t){return [t,'AOS'];}).concat((aos.todo||[]).map(function(t){return [t,'AOS'];}),(wos.todo||[]).map(function(t){return [t,'WOS'];}));
+  /* one row per kind (eight long rows read as a wall): the lanes' top-up
+     suggestions as names only — amounts stay on the laptop — and the
+     month's to-dos as counts; anything else AOS asks of her as is */
+  var laneTU=function(t){ return t.indexOf('cannot fund it · top up RM')>=0; };
+  var rows=(aos.needsYou||[]).filter(function(t){return !laneTU(t);}).map(function(t){return [t,'AOS'];});
+  var tus=(aos.topUps||[]), nTU=(aos.needsYou||[]).filter(laneTU).length;
+  if(tus.length) rows.push(['Top up: '+tus.map(function(t){return t.ticker;}).join(' · '),'AOS']);
+  else if(nTU) rows.push([nTU+' top-up'+(nTU===1?'':'s')+' suggested','AOS']);
+  var na=(aos.todo||[]).length, nw=(wos.todo||[]).length;
+  if(na||nw) rows.push(['Monthly to-do: '+[na?na+' in AOS':'',nw?nw+' in WOS':''].filter(Boolean).join(' · '),na?'AOS':'WOS']);
   h+='<div class="bdh">Needs you</div>'+(rows.length?rows.slice(0,10).map(function(r){
-    return '<div class="row" style="align-items:flex-start"><div class="l" style="align-items:flex-start"><span class="gl-dot" style="background:'+(r[1]==='AOS'?'#e39ab4':'#c79ad8')+'"></span><div>'+esc(r[0])+'</div></div><small style="color:var(--ink3);margin-left:8px">'+r[1]+'</small></div>';
+    return '<div class="row" style="align-items:flex-start"><div class="l" style="align-items:flex-start"><span class="gl-dot" style="background:'+(r[1]==='AOS'?'#e39ab4':'#c79ad8')+'"></span><div'+(/RM /.test(r[0])&&!gl.reveal?' style="filter:blur(5px)"':'')+'>'+esc(r[0])+'</div></div><small style="color:var(--ink3);margin-left:8px">'+r[1]+'</small></div>';
   }).join('')+(rows.length>10?'<div class="mini">+'+(rows.length-10)+' more on the laptop</div>':''):'<div class="mini" style="text-align:left">Nothing waiting ✦</div>');
   var tu=aos.topUps||[];
   h+='<div class="bdh">Add for your Mac</div>'+
