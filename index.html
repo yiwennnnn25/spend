@@ -444,7 +444,7 @@
 
 <script>
 "use strict";
-var APP_VERSION='2026-10-08e'; /*APPVER:2026-10-08e*/
+var APP_VERSION='2026-10-09a'; /*APPVER:2026-10-09a*/
 /* Categories are groups with optional sub-categories. An entry stores the
    group in `cat` (so every total, and the suite reading the gist, still
    rolls up by group) and the sub in `sub`. A group with no subs logs
@@ -2127,7 +2127,7 @@ function backupFile(){
 /* ---- GitHub Gist cloud sync ---- */
 var GIST_FILE='spend-data.json';
 var MAKAN_FILE='makan-data.json';
-var syncT=null, syncing=false;
+var syncT=null, syncing=false, pushAgain=false, lastPull=0;
 function setCloud(st){
   var el=document.getElementById('cloud');
   el.textContent = st==='ok'?'☁️' : st==='pending'?'⏳' : st==='err'?'⚠️' : '';
@@ -2181,17 +2181,24 @@ function syncFail(err,interactive){
     if(interactive)toast('Sync failed — offline?');
   }
 }
+/* Every upload reads the cloud copy first (2026-10-09). The upload is the
+   whole list, so pushing without pulling dropped anything another device
+   had added since — the Mac's menu-bar quick-log above all. pullSync merges
+   (adds theirs, keeps ours, honours deletions) and then pushes the result. */
 function schedSync(){
   if(!cfg.ghToken)return;
   clearTimeout(syncT);setCloud('pending');
-  syncT=setTimeout(function(){pushSync();},1800);
+  syncT=setTimeout(function(){pullSync();},1800);
 }
 function pushSync(interactive){
-  if(!cfg.ghToken||syncing)return;syncing=true;
+  if(!cfg.ghToken)return;
+  if(syncing){pushAgain=true;return;} // one in flight: go again when it lands
+  syncing=true;
   buildPayload(function(content){
     var files={};files[GIST_FILE]={content:content};
     function done(err,j){
       syncing=false;
+      if(pushAgain){pushAgain=false;schedSync();}
       if(err){syncFail(err,interactive);return;}
       if(j&&j.id&&cfg.gistId!==j.id){cfg.gistId=j.id;}
       cfg.lastSync=Date.now();save(CKEY,cfg,true);setCloud('ok');
@@ -2210,6 +2217,7 @@ function pushSync(interactive){
 }
 function pullSync(interactive){
   if(!cfg.ghToken)return;
+  lastPull=Date.now();
   setCloud('pending');
   if(cfg.gistId)fetchGist(interactive);else findGist(interactive);
 }
@@ -2310,6 +2318,7 @@ function applyRemote(data,interactive){
      arrival — settings and rows both. */
   if(cfgNewer||added||updated){ migrateCats(); syncCatIcons(); openGroup=null; renderCats(); }
   renderTotals();
+  if(!interactive&&added) toast('☁️ '+added+' new from your other devices');
   if(interactive){
     var bits=[];
     if(added) bits.push('restored '+added+' entr'+(added===1?'y':'ies'));
@@ -2592,7 +2601,12 @@ if(navigator.storage && navigator.storage.persist) navigator.storage.persist();
 // backup nudge: worth protecting + no backup in 7 days + no cloud sync covering us
 if(!cfg.ghToken && entries.length>=10 && (!cfg.lastBackup || Date.now()-cfg.lastBackup>7*864e5))
   document.getElementById('nudge').style.display='block';
-if(cfg.ghToken){ setCloud('ok'); if(!entries.length) pullSync(); }
+/* Pick up what other devices (the Mac's menu bar) logged: on open, and
+   whenever the app comes back to the front, at most every 2 minutes. */
+if(cfg.ghToken){ setCloud('ok'); pullSync(); }
+document.addEventListener('visibilitychange',function(){
+  if(document.visibilityState==='visible'&&cfg.ghToken&&!syncing&&Date.now()-lastPull>120e3) pullSync();
+});
 </script>
 </body>
 </html>
