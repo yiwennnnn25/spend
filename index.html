@@ -190,6 +190,22 @@
   .setrow input{flex:1;min-width:0;background:var(--card);border:1px solid var(--line);color:var(--ink);
     border-radius:10px;padding:10px;font-size:14px}
   .mini{font-size:11px;color:var(--ink3);text-align:center;margin-top:8px;line-height:1.6}
+  /* ✦ Glance — the laptop suite's summary, read from the Mac (2026-10-09) */
+  .gl-hero{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px 16px;box-shadow:var(--shadow);position:relative;overflow:hidden}
+  .gl-k{font-size:11px;color:var(--ink2)}
+  .gl-big{font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:34px;line-height:1.1;color:var(--ink);margin:2px 0 8px}
+  .gl-pill{position:absolute;top:14px;right:14px;font-size:11px;font-weight:600;color:var(--need);background:var(--need-bg);border-radius:99px;padding:3px 9px}
+  .gl-bar{height:7px;border-radius:99px;background:var(--card2);overflow:hidden}
+  .gl-bar i{display:block;height:100%;border-radius:99px;background:var(--bar);background-size:200% 100%;animation:glShine 3s linear infinite}
+  @keyframes glShine{to{background-position:-200% 0}}
+  .gl-sub{font-size:11px;color:var(--ink2);margin-top:7px;font-variant-numeric:tabular-nums}
+  .gl-tiles{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;margin-top:10px}
+  .gl-tile{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 12px;cursor:pointer}
+  .gl-tile b{display:block;font-size:17px;font-weight:600;margin:3px 0 2px;transition:filter .2s}
+  .gl-tile small{display:block;font-size:10.5px;color:var(--ink2);line-height:1.4;transition:filter .2s}
+  .gl-hush b,.gl-hush small{filter:blur(6px)}
+  .gl-dot{width:7px;height:7px;border-radius:50%;flex:none;margin-top:6px}
+  @media (prefers-reduced-motion:reduce){.gl-bar i{animation:none}}
   .nudge{margin:0 16px 7px;background:var(--want-bg);border:1px solid var(--line);border-radius:12px;
     padding:9px 12px;font-size:12px;color:var(--ink);display:none;cursor:pointer;box-shadow:var(--shadow);text-align:center}
   .nudge b{color:var(--want)}
@@ -435,6 +451,7 @@
     <button onclick="openSheet('recent')">Recent</button>
     <button onclick="insMonth=null;insTab='month';openSheet('break')">Insights</button>
     <button onclick="openSheet('makan')">🍜 Makan</button>
+    <button onclick="glanceOpen()" aria-label="Glance">✦</button>
     <button onclick="openSheet('set')">⚙<span id="cloud"></span></button>
   </div>
 
@@ -444,7 +461,7 @@
 
 <script>
 "use strict";
-var APP_VERSION='2026-10-09a'; /*APPVER:2026-10-09a*/
+var APP_VERSION='2026-10-09b'; /*APPVER:2026-10-09b*/
 /* Categories are groups with optional sub-categories. An entry stores the
    group in `cat` (so every total, and the suite reading the gist, still
    rolls up by group) and the sub in `sub`. A group with no subs logs
@@ -1058,6 +1075,7 @@ function openSheet(kind){
   else if(kind==='refile') body.innerHTML=refileHtml();
   else if(kind==='hist') body.innerHTML=histHtml();
   else if(kind==='merge') body.innerHTML=mergeHtml();
+  else if(kind==='glance') body.innerHTML=glanceHtml();
   else body.innerHTML=setHtml();
   currentSheet=kind;
   document.getElementById('sheet').classList.add('open');
@@ -2428,6 +2446,151 @@ function histHtml(){
   }).join('')||'<div class="mini">No versions found.</div>');
 }
 window.histLoad=histLoad;window.histOpen=histOpen;window.histRestore=histRestore;
+
+/* ---- ✦ Glance (2026-10-09) ---------------------------------------------
+   The suite (Allocation OS, Wealth OS) only runs on her laptop. The Mac's
+   menu-bar app copies its glance into a private gist of its own —
+   glance-data.json, encrypted with this app's passphrase — and this sheet
+   reads it: days to FI, investments vs the S&P 500, what's left to invest,
+   Needs You. Money is blurred until tapped.
+   The other way: a wish or a top-up added here is appended to that gist's
+   glance-inbox.json; the Mac forwards each one once to Wishlist / Allocation
+   OS. Only this side writes that file (the Mac just remembers ids), and it
+   prunes its own items after 14 days. -------------------------------------- */
+var GLANCE_FILE='glance-data.json', GLANCE_INBOX='glance-inbox.json', GLKEY='xpense_glance_v1';
+var gl=(function(){ var c=null; try{ c=JSON.parse(localStorage.getItem(GLKEY)||'null'); }catch(e){}
+  return {gistId:c&&c.gistId||'', data:c&&c.data||null, loading:false, err:'', add:'wish', reveal:false, sending:false}; })();
+function glanceSave(){ try{ localStorage.setItem(GLKEY,JSON.stringify({gistId:gl.gistId,data:gl.data})); }catch(e){} }
+function glanceRedraw(){ if(currentSheet==='glance'&&document.getElementById('sheet').classList.contains('open')) openSheet('glance'); }
+function glanceOpen(){ openSheet('glance'); glanceLoad(); }
+function glanceRead(f,cb){
+  function parse(t){
+    var o=null; try{o=JSON.parse(t);}catch(e){}
+    if(!o){cb(new Error('unreadable'));return;}
+    if(!o.enc){cb(null,o);return;}
+    decryptPayload(o,cfg.syncPass).then(function(pt){ var d=null; try{d=JSON.parse(pt);}catch(e){} cb(d?null:new Error('unreadable'),d); },
+      function(){cb(new Error('passphrase'));});
+  }
+  if(f.truncated) fetch(f.raw_url).then(function(r){return r.text();}).then(parse,function(e){cb(e);});
+  else parse(f.content||'');
+}
+function glanceGist(cb,retry){
+  function get(){
+    ghReq('GET','https://api.github.com/gists/'+gl.gistId,null,function(err,j){
+      if(err&&/404/.test(err.message)&&!retry){ gl.gistId=''; glanceSave(); glanceGist(cb,true); return; }
+      cb(err,j&&j.files);
+    });
+  }
+  if(gl.gistId){get();return;}
+  ghReq('GET','https://api.github.com/gists?per_page=100',null,function(err,list){
+    if(err){cb(err);return;}
+    var g=(list||[]).filter(function(x){return x.files&&x.files[GLANCE_FILE];})[0];
+    if(!g){cb(new Error('none'));return;}
+    gl.gistId=g.id; glanceSave(); get();
+  });
+}
+function glanceLoad(){
+  if(!cfg.ghToken||!cfg.syncPass){ gl.err='Connect cloud sync with your passphrase in ⚙ first.'; glanceRedraw(); return; }
+  gl.loading=true; gl.err=''; glanceRedraw();
+  glanceGist(function(err,files){
+    if(err){ gl.loading=false; gl.err=/none/.test(err.message)?'Nothing from your Mac yet — Glance on the Mac creates this once it\'s connected to Spend.':'Couldn\'t reach the cloud — offline?'; glanceRedraw(); return; }
+    var f=files&&files[GLANCE_FILE];
+    if(!f){ gl.loading=false; gl.err='Nothing from your Mac yet.'; glanceRedraw(); return; }
+    glanceRead(f,function(e,d){
+      gl.loading=false;
+      if(e){ gl.err=/passphrase/.test(e.message)?'This phone\'s passphrase doesn\'t open it — the Mac uses the one in its Settings.':'Couldn\'t read it.'; }
+      else if(d&&d.v){ gl.data=d; glanceSave(); }
+      else gl.err='Nothing from your Mac yet.';
+      glanceRedraw();
+    });
+  });
+}
+function glAgo(iso){
+  var t=Date.parse(iso); if(!t) return '';
+  var m=Math.round((Date.now()-t)/60000);
+  return m<2?'just now':m<60?m+'m ago':m<2880?Math.round(m/60)+'h ago':Math.round(m/1440)+'d ago';
+}
+function glRM(v){ return 'RM '+Math.round(v).toLocaleString('en-MY'); }
+function glPct(r){ return (r>=0?'+':'−')+Math.abs(r*100).toFixed(1)+'%'; }
+function glanceHtml(){
+  var h='<h2>✦ Glance<button class="x" onclick="closeSheet()">✕</button></h2>';
+  var d=gl.data;
+  if(!d){ return h+'<div class="mini">'+(gl.loading?'Fetching from your Mac…':esc(gl.err||''))+'</div>'; }
+  var aos=d.aos||{}, wos=d.wos||{}, fi=wos.fi||{}, ms=d.monthStart;
+  var ats=[aos.at,wos.at].filter(Boolean).sort();
+  h+='<div class="mini" style="text-align:left;margin:-6px 0 10px">From your Mac · '+(ats.length?glAgo(ats[0]):'')+
+     (gl.loading?' · checking…':' · <a href="#" onclick="glanceLoad();return false" style="color:var(--lav)">refresh</a>')+
+     (gl.err?'<br>'+esc(gl.err):'')+'</div>';
+  if(fi.days!=null){
+    var closer=ms&&ms.days-fi.days;
+    h+='<div class="gl-hero"><div class="gl-k">Freedom, bridge to 55</div>'+
+       (closer>0?'<span class="gl-pill">−'+closer+' since '+esc(ms.since)+'</span>':'')+
+       '<div class="gl-big">'+fi.days.toLocaleString('en-MY')+' days</div>'+
+       '<div class="gl-bar"><i style="width:'+Math.max(2,Math.min(100,fi.fullPct||0))+'%"></i></div>'+
+       '<div class="gl-sub">full '+Math.round(fi.fullPct||0)+'% · bridge '+Math.round(fi.bridgePct||0)+'%'+(fi.age?' · at '+fi.age:'')+'</div></div>';
+  }
+  var p=aos.perf, m=aos.month, mon=new Date().toLocaleDateString('en-GB',{month:'short'});
+  h+='<div class="gl-tiles'+(gl.reveal?'':' gl-hush')+'" onclick="gl.reveal=!gl.reveal;glanceRedraw()">'+
+     '<div class="gl-tile"><div class="gl-k">My investments</div><b>'+(p?glPct(p.r):'—')+'</b><small>'+
+       (p?(p.bench!=null?'S&amp;P 500 did '+glPct(p.bench)+' · ':'')+'since '+esc(p.since||''):'')+'</small></div>'+
+     '<div class="gl-tile"><div class="gl-k">Left to invest, '+mon+'</div><b>'+(m?glRM(m.remaining):'—')+'</b><small>'+
+       (m?'of '+glRM(m.budget)+' this month':'')+'</small></div></div>'+
+     '<div class="mini" style="margin-top:4px">'+(gl.reveal?'tap to hide':'tap to show amounts')+'</div>';
+  var rows=(aos.needsYou||[]).map(function(t){return [t,'AOS'];}).concat((aos.todo||[]).map(function(t){return [t,'AOS'];}),(wos.todo||[]).map(function(t){return [t,'WOS'];}));
+  h+='<div class="bdh">Needs you</div>'+(rows.length?rows.slice(0,10).map(function(r){
+    return '<div class="row" style="align-items:flex-start"><div class="l" style="align-items:flex-start"><span class="gl-dot" style="background:'+(r[1]==='AOS'?'#e39ab4':'#c79ad8')+'"></span><div>'+esc(r[0])+'</div></div><small style="color:var(--ink3);margin-left:8px">'+r[1]+'</small></div>';
+  }).join('')+(rows.length>10?'<div class="mini">+'+(rows.length-10)+' more on the laptop</div>':''):'<div class="mini" style="text-align:left">Nothing waiting ✦</div>');
+  var tu=aos.topUps||[];
+  h+='<div class="bdh">Add for your Mac</div>'+
+     '<div class="seg" style="margin:4px 0 6px"><button class="'+(gl.add==='wish'?'on':'')+'" onclick="gl.add=\'wish\';glanceRedraw()">Wish</button><button class="'+(gl.add==='topup'?'on':'')+'" onclick="gl.add=\'topup\';glanceRedraw()">Top-up</button></div>'+
+     (gl.add==='wish'
+       ?'<div class="setrow"><input id="glName" placeholder="What is it" autocomplete="off"></div>'+
+        '<div class="setrow"><input id="glAmt" inputmode="decimal" placeholder="Price, RM" autocomplete="off"></div>'+
+        '<div class="setrow"><input id="glLink" placeholder="Link (optional)" autocomplete="off"></div>'
+       :'<div class="setrow"><input id="glName" placeholder="Ticker, as AOS names it" autocomplete="off"></div>'+
+        (tu.length?'<div style="display:flex;flex-wrap:wrap;gap:6px;padding:8px 0">'+tu.map(function(t){
+          return '<button class="copybtn" style="width:auto;margin:0;padding:6px 11px;font-size:12px;background:var(--card2);color:var(--ink)" onclick="document.getElementById(\'glName\').value=\''+esc(t.ticker).replace(/'/g,"\\'")+'\';document.getElementById(\'glAmt\').value=\''+t.rm+'\'">'+esc(t.ticker)+' · '+glRM(t.rm)+'</button>';
+        }).join('')+'</div>':'')+
+        '<div class="setrow"><input id="glAmt" inputmode="decimal" placeholder="Amount, RM" autocomplete="off"></div>')+
+     '<div class="setrow"><input id="glNote" placeholder="Note (optional)" autocomplete="off"></div>'+
+     '<button class="copybtn" onclick="glanceSend()">'+(gl.sending?'Sending…':'Send to my Mac')+'</button>'+
+     '<div class="mini">'+(gl.add==='wish'?'Lands in Wishlist':'Waits in Allocation OS Needs You — add units and price there')+' once your Mac is on.</div>';
+  return h;
+}
+function glanceSend(){
+  if(gl.sending) return;
+  function val(id){ var e=document.getElementById(id); return e?e.value.trim():''; }
+  var name=val('glName'), amt=parseFloat(val('glAmt').replace(/[^\d.]/g,'')), link=val('glLink'), note=val('glNote');
+  if(!name){ toast(gl.add==='wish'?'Name the thing first':'Which name?'); return; }
+  if(!(amt>0)){ toast('Enter an amount first'); return; }
+  if(!cfg.ghToken||!cfg.syncPass){ toast('Connect cloud sync in ⚙ first'); return; }
+  var item={id:'ph-'+genId(), kind:gl.add, at:new Date().toISOString()};
+  if(gl.add==='wish'){ item.name=name; item.price=amt; if(link) item.link=link; } else { item.ticker=name; item.rm=amt; }
+  if(note) item.note=note;
+  /* the button says it's working; no redraw, so a failed send keeps what she typed */
+  var btn=document.querySelector('#sheetBody .copybtn:last-of-type');
+  gl.sending=true; if(btn) btn.textContent='Sending…';
+  function fail(){ gl.sending=false; if(btn) btn.textContent='Send to my Mac'; toast('Couldn\'t send — offline?'); }
+  glanceGist(function(err,files){
+    if(err){ fail(); return; }
+    function append(inbox){
+      var cut=Date.now()-14*864e5, items=((inbox&&inbox.items)||[]).filter(function(x){ return Date.parse(x.at)>cut; });
+      items.push(item);
+      encryptPayload(JSON.stringify({items:items}),cfg.syncPass).then(function(content){
+        var fl={}; fl[GLANCE_INBOX]={content:content};
+        ghReq('PATCH','https://api.github.com/gists/'+gl.gistId,{files:fl},function(e){
+          if(e){ fail(); return; }
+          gl.sending=false; glanceRedraw();
+          toast(gl.add==='wish'?'✦ Sent — Wishlist adds it':'✦ Sent — waiting in AOS Needs You');
+        });
+      },fail);
+    }
+    var f=files&&files[GLANCE_INBOX];
+    if(!f){ append(null); return; }
+    glanceRead(f,function(e,d){ if(e){ fail(); return; } append(d); });
+  });
+}
+window.glanceOpen=glanceOpen;window.glanceLoad=glanceLoad;window.glanceSend=glanceSend;
 function connectSync(){
   var inp=document.getElementById('ghTok');
   var tok=(inp&&inp.value||'').trim();
