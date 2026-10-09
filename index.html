@@ -461,7 +461,7 @@
 
 <script>
 "use strict";
-var APP_VERSION='2026-10-09b'; /*APPVER:2026-10-09b*/
+var APP_VERSION='2026-10-09c'; /*APPVER:2026-10-09c*/
 /* Categories are groups with optional sub-categories. An entry stores the
    group in `cat` (so every total, and the suite reading the gist, still
    rolls up by group) and the sub in `sub`. A group with no subs logs
@@ -2523,11 +2523,11 @@ function glanceHtml(){
      (gl.err?'<br>'+esc(gl.err):'')+'</div>';
   if(fi.days!=null){
     var closer=ms&&ms.days-fi.days;
-    h+='<div class="gl-hero"><div class="gl-k">Freedom, bridge to 55</div>'+
+    h+='<div class="gl-hero"><div class="gl-k">Days to freedom</div>'+
        (closer>0?'<span class="gl-pill">−'+closer+' since '+esc(ms.since)+'</span>':'')+
        '<div class="gl-big">'+fi.days.toLocaleString('en-MY')+' days</div>'+
        '<div class="gl-bar"><i style="width:'+Math.max(2,Math.min(100,fi.fullPct||0))+'%"></i></div>'+
-       '<div class="gl-sub">full '+Math.round(fi.fullPct||0)+'% · bridge '+Math.round(fi.bridgePct||0)+'%'+(fi.age?' · at '+fi.age:'')+'</div></div>';
+       '<div class="gl-sub">total goal '+Math.round(fi.fullPct||0)+'% · before-55 goal '+Math.round(fi.bridgePct||0)+'%'+(fi.age?' · free at '+fi.age:'')+'</div></div>';
   }
   var p=aos.perf, m=aos.month, mon=new Date().toLocaleDateString('en-GB',{month:'short'});
   h+='<div class="gl-tiles'+(gl.reveal?'':' gl-hush')+'" onclick="gl.reveal=!gl.reveal;glanceRedraw()">'+
