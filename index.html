@@ -130,6 +130,10 @@
   .confirm .toggles{padding:0;margin-top:10px}
   .confirm .seg{background:rgba(255,255,255,.55)}
   .confirm .note{width:100%;margin:8px 0 0}
+  .cftrip{margin-top:10px}
+  .cftrip .cftl{display:block;font-size:12px;font-weight:600;color:var(--ink2);margin:0 0 6px 2px}
+  .cftrip .tpick{margin:0;flex-wrap:wrap}
+  .cftrip .tpick button{background:rgba(255,255,255,.7);font-size:13px;padding:8px 13px}
   .cfhead{display:flex;align-items:center;gap:8px;font-size:16px;font-weight:700;color:var(--ink)}
   .cfhead small{color:var(--ink2);font-weight:500;font-size:13px}
   .cfhead button{margin-left:auto;border:0;background:rgba(255,255,255,.7);color:var(--ink2);
@@ -210,7 +214,7 @@
   .gl-up{color:var(--need)} .gl-dn{color:var(--blush)}
   .gl-lot{font-size:11.5px;color:var(--ink2);padding:2px 0 8px 2px;line-height:1.6}
   .gl-leg{display:flex;flex-wrap:wrap;gap:10px;font-size:11px;color:var(--ink2);margin-top:6px}
-  .gl-leg i{display:inline-block;width:9px;height:3px;border-radius:2px;margin-right:4px;vertical-align:middle}
+  .gl-leg i{display:inline-block;width:12px;height:3px;border-radius:2px;margin-right:4px;vertical-align:middle}
   @media (prefers-reduced-motion:reduce){.gl-bar i{animation:none}}
   .nudge{margin:0 16px 7px;background:var(--want-bg);border:1px solid var(--line);border-radius:12px;
     padding:9px 12px;font-size:12px;color:var(--ink);display:none;cursor:pointer;box-shadow:var(--shadow);text-align:center}
@@ -443,6 +447,7 @@
       </div>
       <div class="seg" id="methodSeg"></div>
     </div>
+    <div class="cftrip" id="cfTrip"></div>
     <input id="note" class="note" placeholder="note (optional) · e.g. flight, gym, haircut" autocomplete="off" enterkeyhint="done">
     <button class="go" id="cfGo" onclick="logPend()"></button>
   </div>
@@ -467,7 +472,7 @@
 
 <script>
 "use strict";
-var APP_VERSION='2026-10-09g'; /*APPVER:2026-10-09g*/
+var APP_VERSION='2026-10-19a'; /*APPVER:2026-10-19a*/
 /* Categories are groups with optional sub-categories. An entry stores the
    group in `cat` (so every total, and the suite reading the gist, still
    rolls up by group) and the sub in `sub`. A group with no subs logs
@@ -705,6 +710,74 @@ function startTrip(c){
   if(activeTrip()) return;
   var t={id:genId(), name:(TRIP_NAME[c]||c)+' '+new Date().toLocaleDateString('en-GB',{month:'short',year:'numeric'}), c:c, start:Date.now(), end:null};
   cfg.trips=(cfg.trips||[]).concat([t]); cfg.tripOn=t.id;
+  tripAsk={id:t.id, stage:plannedTrips().length?'plan':'book', off:{}}; // after Settings redraws: which trip, and its bookings
+}
+/* Bookings join their trip (2026-10-19, hers: "hotels, flights, tickets
+   should be under that trip's total"). Two ways, both on:
+   · plan it when you book — logging Travel asks "Which trip?" and can
+     make one ("Japan Dec"): a PLANNED trip has no start yet. Picking
+     that currency later continues it instead of making a new one.
+   · pick them up when it starts — Travel entries logged since the last
+     trip ended with no trip yet are offered, ticked, one tap to add. */
+var tripAsk=null, pendTrip=null;
+function isTravelPick(g,s){ return !!((s&&s.n==='Travel')||(g&&g.n==='Travel')); }
+function isTravelEntry(e){ return e.sub==='Travel'||e.cat==='Travel'; }
+function plannedTrips(){ return (cfg.trips||[]).filter(function(t){ return !t.start&&!t.end; }); }
+function newTripNamed(){
+  var n=prompt('Name the trip','e.g. Japan Dec'); n=(n||'').trim();
+  if(!n||n==='e.g. Japan Dec') return null;
+  var t={id:genId(), name:n, c:'', start:null, end:null};
+  cfg.trips=(cfg.trips||[]).concat([t]); save(CKEY,cfg); return t;
+}
+function tripCandidates(id){
+  var since=0; (cfg.trips||[]).forEach(function(t){ if(t.end&&t.id!==id&&t.end>since) since=t.end; });
+  if(!since) since=Date.now()-365*864e5;
+  var now=Date.now();
+  return entries.filter(function(e){ var t=new Date(e.ts).getTime(); return !e.trip&&isTravelEntry(e)&&t>since&&t<=now; })
+    .sort(function(a,b){return a.ts<b.ts?-1:1;});
+}
+function tripAskOpen(){
+  if(!tripAsk) return;
+  if(tripAsk.stage==='book'&&!tripCandidates(tripAsk.id).length){ tripAsk=null; return; }
+  openSheet('tripstart');
+}
+function tripUsePlanned(pid){ // the planned trip carries on; the one just made goes
+  var now=tripById(tripAsk.id), p=tripById(pid); if(!now||!p) return;
+  p.start=now.start; p.c=now.c;
+  cfg.trips=cfg.trips.filter(function(t){return t.id!==now.id;}); cfg.tripOn=p.id;
+  entries.forEach(function(e){ if(e.trip===now.id){ e.trip=p.id; e.u=Date.now(); } });
+  save(KEY,entries); save(CKEY,cfg);
+  tripAsk={id:p.id, stage:'book', off:{}}; renderCur();
+  if(!tripCandidates(p.id).length){ tripAsk=null; closeSheet(); toast('✈️ '+p.name+' started'); return; }
+  openSheet('tripstart');
+}
+function tripNotPlanned(){ tripAsk.stage='book'; if(!tripCandidates(tripAsk.id).length){ tripAsk=null; closeSheet(); return; } openSheet('tripstart'); }
+function tripToggleBook(id){ tripAsk.off[id]=!tripAsk.off[id]; openSheet('tripstart'); }
+function tripAddBooked(){
+  var t=tripById(tripAsk.id), n=0, now=Date.now();
+  tripCandidates(tripAsk.id).forEach(function(e){ if(!tripAsk.off[e.id]){ e.trip=t.id; e.u=now; n++; } });
+  save(KEY,entries); tripAsk=null; closeSheet(); renderCur(); renderTotals();
+  toast(n?n+' booking'+(n===1?'':'s')+' added to '+t.name:'✈️ '+t.name+' started');
+}
+function tripStartHtml(){
+  if(!tripAsk) return '<h2>Trip<button class="x" onclick="closeSheet()">✕</button></h2>';
+  var t=tripById(tripAsk.id); if(!t){ tripAsk=null; return '<h2>Trip<button class="x" onclick="closeSheet()">✕</button></h2>'; }
+  function sum(list){ return list.reduce(function(a,e){return a+e.amt;},0); }
+  if(tripAsk.stage==='plan'){
+    return '<h2>Which trip is this?<button class="x" onclick="tripNotPlanned()">✕</button></h2>'+
+      '<div class="mini" style="text-align:left;margin:-4px 0 10px">You planned these when you booked. Pick one and its bookings are already in it.</div>'+
+      plannedTrips().slice().reverse().map(function(p){ var l=tripEntries(p.id);
+        return '<div class="row rowc" onclick="tripUsePlanned(\''+p.id+'\')"><div class="l"><span class="e">✈️</span><div>'+esc(p.name)+
+          '<small>'+(l.length?l.length+' booking'+(l.length===1?'':'s')+' · RM '+fmt(sum(l)):'nothing booked yet')+'</small></div></div><b>›</b></div>'; }).join('')+
+      '<div class="row rowc" onclick="tripNotPlanned()"><div class="l"><span class="e">＋</span><div>A new trip<small>'+esc(t.name)+'</small></div></div><b>›</b></div>';
+  }
+  var list=tripCandidates(t.id), on=list.filter(function(e){return !tripAsk.off[e.id];});
+  return '<h2>Bookings for '+esc(t.name)+'?<button class="x" onclick="tripAsk=null;closeSheet()">✕</button></h2>'+
+    '<div class="mini" style="text-align:left;margin:-4px 0 10px">Travel you logged before leaving, not in a trip yet. Untick any that belong to another trip.</div>'+
+    list.map(function(e){ var off=tripAsk.off[e.id];
+      return '<div class="row rowc" onclick="tripToggleBook(\''+e.id+'\')"><div class="l"><span class="e">'+(off?'○':'✅')+'</span><div>'+esc(e.note||shortLabel(e))+
+        '<small>'+new Date(e.ts).toLocaleDateString('en-GB',{day:'numeric',month:'short'})+' · '+esc(catLabel(e))+'</small></div></div><b class="num"'+(off?' style="opacity:.4"':'')+'>RM '+fmt(e.amt)+'</b></div>'; }).join('')+
+    '<button class="copybtn" onclick="tripAddBooked()"'+(on.length?'':' style="background:var(--card2);color:var(--ink2)"')+'>'+(on.length?'Add '+on.length+' · RM '+fmt(sum(on))+' to the trip':'Skip — add none')+'</button>';
 }
 function endTrip(){
   var t=activeTrip(); if(!t) return;
@@ -830,6 +903,7 @@ var drag=null, dragJustEnded=false;
 })();
 function pick(g,s,el){
   pending={g:g,s:s}; openGroup=null;
+  var pl=plannedTrips(); pendTrip=pl.length?pl[pl.length-1].id:''; // the newest planned trip; one tap to say no
   var d=catDefault(g.n,s&&s.n)||{};
   if(d.method) cfg.method=d.method;
   if(d.need) cfg.need=d.need;
@@ -849,8 +923,23 @@ function renderPend(){
   document.getElementById('cfWhat').innerHTML=(s?s.e:g.e)+' '+esc(s&&s.n!==CATCH?s.n:g.n)+
     (s&&s.n!==CATCH?' <small>· '+esc(g.n)+'</small>':'');
   var go=document.getElementById('cfGo');
+  renderTripPick();
   go.disabled=!v; go.textContent=!v?'Type the amount':fxOn()?'✓ Log '+curSym(cfg.fx.c)+fmt2(parseFloat(amt))+' · RM '+fmt2(toRM(parseFloat(amt))):'✓ Log RM '+fmt2(parseFloat(amt));
   setStep('card');
+}
+function renderTripPick(){
+  var el=document.getElementById('cfTrip'); if(!el) return;
+  if(!pending||!isTravelPick(pending.g,pending.s)||activeTrip()){ el.innerHTML=''; el.style.display='none'; return; }
+  el.style.display='';
+  var pl=plannedTrips().slice(-3).reverse();
+  el.innerHTML='<span class="cftl">Which trip?</span><div class="tpick">'+
+    '<button class="'+(pendTrip?'':'on')+'" onclick="setPendTrip(\'\')">No trip</button>'+
+    pl.map(function(t){ return '<button class="'+(pendTrip===t.id?'on':'')+'" onclick="setPendTrip(\''+t.id+'\')">✈️ '+esc(t.name)+'</button>'; }).join('')+
+    '<button onclick="setPendTrip(\'new\')">＋ New trip</button></div>';
+}
+function setPendTrip(id){
+  if(id==='new'){ var t=newTripNamed(); if(!t) return; id=t.id; }
+  pendTrip=id; renderTripPick();
 }
 // back to the grid, on the group she was in — the usual change is a sub next door
 function changePick(){ var g=pending&&pending.g; pending=null; openGroup=(g&&g.subs.length)?g.n:null; renderCats(); setStep('cat'); }
@@ -928,6 +1017,7 @@ function logExpense(cat,sub,el){
   if(sub) entry.sub=sub.n;
   if(fxOn()) entry.fx={c:cfg.fx.c, a:typed, r:cfg.fx.r};
   if(activeTrip()) entry.trip=cfg.tripOn;
+  else if(pendTrip&&isTravelPick(cat,sub)&&tripById(pendTrip)) entry.trip=pendTrip;
   if(document.body.classList.contains('him')){ entry.tag='him'; document.body.classList.remove('him'); } // one entry at a time
   entries.push(entry);
   save(KEY,entries);
@@ -1082,6 +1172,7 @@ function openSheet(kind){
   else if(kind==='hist') body.innerHTML=histHtml();
   else if(kind==='merge') body.innerHTML=mergeHtml();
   else if(kind==='glance') body.innerHTML=glanceHtml();
+  else if(kind==='tripstart') body.innerHTML=tripStartHtml();
   else body.innerHTML=setHtml();
   currentSheet=kind;
   document.getElementById('sheet').classList.add('open');
@@ -1263,9 +1354,10 @@ function editHtml(id){
     '<div class="bdh">Category</div>'+
     '<div class="setrow"><select id="edCat" style="flex:1;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px;font-size:14px;color:var(--ink)">'+catOpts+'</select></div>'+
     (function(){ var n=planParts(e).length; return n>1?'<label class="planall"><input type="checkbox" id="edAll" checked> Apply category, need/want, account &amp; trip to all <b>'+n+' parts</b> of this installment</label>':''; })()+
-    ((cfg.trips||[]).length?'<div class="bdh">Trip</div>'+
+    ((cfg.trips||[]).length||isTravelEntry(e)?'<div class="bdh">Trip</div>'+
       '<div class="setrow"><select id="edTrip" style="flex:1;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px;font-size:14px;color:var(--ink)">'+
-      '<option value="">Not part of a trip</option>'+(cfg.trips||[]).slice().reverse().map(function(t){return '<option value="'+t.id+'"'+(e.trip===t.id?' selected':'')+'>✈️ '+esc(t.name)+'</option>';}).join('')+'</select></div>':'')+
+      '<option value="">Not part of a trip</option>'+(cfg.trips||[]).slice().reverse().map(function(t){return '<option value="'+t.id+'"'+(e.trip===t.id?' selected':'')+'>✈️ '+esc(t.name)+(t.start?'':' · planned')+'</option>';}).join('')+
+      '<option value="__new">＋ New trip…</option></select></div>':'')+
     '<div class="bdh">Account</div>'+
     '<div class="setrow"><select id="edMethod" style="flex:1;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px;font-size:14px;color:var(--ink)">'+mOpts+'</select></div>'+
     '<div class="bdh">Need or want</div>'+
@@ -1352,7 +1444,8 @@ function saveEdit(id){
   e.amt=v;
   if(cv[0]){ e.cat=cv[0]; if(cv[1]) e.sub=cv[1]; else delete e.sub; e.e=iconFor(e.cat,e.sub)||e.e; }
   e.method=(document.getElementById('edMethod')||{}).value||e.method;
-  var tEl=document.getElementById('edTrip'); if(tEl){ if(tEl.value) e.trip=tEl.value; else delete e.trip; }
+  var tEl=document.getElementById('edTrip');
+  if(tEl){ var tv=tEl.value; if(tv==='__new'){ var nt=newTripNamed(); tv=nt?nt.id:(e.trip||''); } if(tv) e.trip=tv; else delete e.trip; }
   var needBtn=document.querySelector('#edNeed button.on');
   e.need=needBtn?needBtn.dataset.v:e.need;
   var himBtn=document.querySelector('#edHim button.on');
@@ -1651,7 +1744,8 @@ function tripsHtml(){
     return '<button class="'+(x.id===t.id?'on':'')+'" onclick="insTrip=\''+x.id+'\';openSheet(\'break\')">✈️ '+esc(x.name)+'</button>';}).join('')+'</div>':'';
   /* the trip runs from when it was started; things booked before it (flights,
      hotel) count in the total but don't stretch the dates or the daily figure */
-  var d0=new Date(t.start), d1=t.end?new Date(t.end):new Date(), startDay=dKey(d0);
+  /* a planned trip hasn't started: everything in it is booked ahead */
+  var planned=!t.start, d0=new Date(t.start||Date.now()+864e5), d1=t.end?new Date(t.end):new Date(), startDay=dKey(d0);
   var days=Math.max(1,Math.round((new Date(d1.toDateString())-new Date(d0.toDateString()))/864e5)+1);
   var during=list.filter(function(e){return entryDay(e)>=startDay;}), before=list.filter(function(e){return entryDay(e)<startDay;});
   var durTot=during.reduce(sum,0), befTot=before.reduce(sum,0);
@@ -1660,10 +1754,11 @@ function tripsHtml(){
   var rmPart=list.filter(function(e){return !e.fx;}).reduce(sum,0);
   if(rmPart) paidIn+='<span class="ichip">RM '+fmt(rmPart)+' paid in RM</span>';
   function dl(d){return d.toLocaleDateString('en-GB',{day:'numeric',month:'short'});}
-  var hero='<div class="ihero"><div class="ilabel">'+esc(t.name)+(t.end?'':' · now')+'</div>'+
+  var hero='<div class="ihero"><div class="ilabel">'+esc(t.name)+(t.end||planned?'':' · now')+'</div>'+
     '<div class="itot num">RM '+fmt(tot)+'</div>'+
-    '<div class="iline num">'+dl(d0)+' – '+(t.end?dl(d1):'today')+' · '+days+' day'+(days===1?'':'s')+' · RM '+fmt(durTot/days)+' a day there</div>'+
-    (befTot?'<div class="iline small num">incl. RM '+fmt(befTot)+' booked before you left</div>':'')+
+    (planned?'<div class="iline">Planned · starts when you pick its currency in ⚙</div>':
+    '<div class="iline num">'+dl(d0)+' – '+(t.end?dl(d1):'today')+' · '+days+' day'+(days===1?'':'s')+' · RM '+fmt(durTot/days)+' a day there</div>')+
+    (befTot&&!planned?'<div class="iline small num">incl. RM '+fmt(befTot)+' booked before you left</div>':'')+
     (paidIn?'<div class="ichips">'+paidIn+'</div>':'')+'</div>';
   var gc={}; list.forEach(function(e){gc[e.cat]=(gc[e.cat]||0)+e.amt;});
   var keys=Object.keys(gc).sort(function(a,b){return gc[b]-gc[a];}), gmax=keys.length?gc[keys[0]]:1;
@@ -1906,7 +2001,7 @@ function fxFetch(quiet){
     if(!(r>0)) throw 0;
     cfg.fx.r=Math.round(r*10000)/10000; cfg.fx.t=Date.now(); fxRemember(); save(CKEY,cfg);
     renderCur(); renderAmt();
-    if(!quiet){ openSheet('set'); toast('1 '+cfg.fx.c+' = RM '+cfg.fx.r); }
+    if(!quiet){ if(currentSheet!=='tripstart') openSheet('set'); toast('1 '+cfg.fx.c+' = RM '+cfg.fx.r); } // never cover the trip question
     else if(currentSheet==='set'&&document.getElementById('sheet').classList.contains('open')) openSheet('set');
   }).catch(function(){ if(!quiet) toast('Couldn\'t get the rate — type it in'); });
 }
@@ -1940,6 +2035,7 @@ function wireSettings(){
     }
     save(CKEY,cfg); renderCur(); renderAmt(); openSheet('set');
     if(cfg.fx&&!cfg.fx.r) fxFetch();
+    tripAskOpen();
   });
   var fr=document.getElementById('fxRate');
   if(fr) fr.addEventListener('change',function(){ var r=parseFloat(fr.value); if(r>0){ cfg.fx.r=r; cfg.fx.t=Date.now(); fxRemember(); save(CKEY,cfg); renderCur(); renderAmt(); } });
@@ -2626,23 +2722,26 @@ function glWealthHtml(wos){
   function mon(m){ var p=m.split('-'); return new Date(+p[0],+p[1]-1,1).toLocaleDateString('en-GB',{month:'short'}); }
   var h=glOld(wos.at)+'<div class="gl-hero"><div class="gl-k">Net worth · '+mon(last.m)+' log</div><div class="gl-big" style="font-style:normal">'+glMoney(last.nw)+'</div>'+
     '<div class="gl-sub">'+(prev?'<b class="'+(last.nw>=prev.nw?'gl-up':'gl-dn')+'">'+glSigned(last.nw-prev.nw)+'</b> since '+mon(prev.m)+' · ':'')+'highest '+glMoney(Math.max(wos.nwHigh||0,last.nw))+'</div></div>';
-  var ser=[['nw','Net worth','#c79ad8'],['inv','Investments','#e39ab4'],['cash','Cash','#8fc7a8'],['liab','Liabilities','#d68a6e']];
+  /* Same four colours as the suite's History lines (2026-10-10, validated:
+     the old pastels made net worth and investments look alike). Liabilities
+     dashed so it never rests on colour alone. */
+  var ser=[['nw','Net worth','#7c4ddb'],['inv','Investments','#f472b6'],['cash','Cash','#0e8a74'],['liab','Liabilities','#e2683c']];
   var all=[]; hist.forEach(function(r){ ser.forEach(function(s){ all.push(r[s[0]]||0); }); });
   var lo=Math.min(0,Math.min.apply(null,all)), hi=Math.max.apply(null,all)||1, W=300, H=140, n=hist.length;
   function x(i){ return n<2?W/2:(i/(n-1))*W; } function y(v){ return H-6-(v-lo)/(hi-lo)*(H-12); }
   var svg='<svg viewBox="0 0 '+W+' '+(H+14)+'" width="100%" style="display:block;margin-top:6px">'+
-    ser.map(function(s){ return '<path d="'+hist.map(function(r,i){ return (i?'L':'M')+x(i).toFixed(1)+' '+y(r[s[0]]||0).toFixed(1); }).join(' ')+'" fill="none" stroke="'+s[2]+'" stroke-width="'+(s[0]==='nw'?2.6:1.6)+'" stroke-linejoin="round"/>'; }).join('')+
+    ser.map(function(s){ return '<path d="'+hist.map(function(r,i){ return (i?'L':'M')+x(i).toFixed(1)+' '+y(r[s[0]]||0).toFixed(1); }).join(' ')+'" fill="none" stroke="'+s[2]+'" stroke-width="'+(s[0]==='nw'?2.6:1.8)+'"'+(s[0]==='liab'?' stroke-dasharray="5 4"':'')+' stroke-linejoin="round"/>'; }).join('')+
     hist.map(function(r,i){ return (i===0||i===n-1||i%3===0)?'<text x="'+x(i).toFixed(0)+'" text-anchor="'+(i===0?'start':i===n-1?'end':'middle')+'" y="'+(H+12)+'" font-size="9" fill="#8c7980">'+mon(r.m)+'</text>':''; }).join('')+'</svg>';
-  h+='<div class="bdh">Month by month</div>'+svg+'<div class="gl-leg">'+ser.map(function(s){ return '<span><i style="background:'+s[2]+'"></i>'+s[1]+'</span>'; }).join('')+'</div>';
+  h+='<div class="bdh">Month by month</div>'+svg+'<div class="gl-leg">'+ser.map(function(s){ return '<span><i style="background:'+(s[0]==='liab'?'repeating-linear-gradient(90deg,'+s[2]+' 0 4px,transparent 4px 6px)':s[2])+'"></i>'+s[1]+'</span>'; }).join('')+'</div>';
   var inc=(wos.income||[]).slice().sort(function(a,b){return a.m<b.m?-1:1;});
   if(inc.length){
     var top=Math.max.apply(null,inc.map(function(r){return r.sal+r.pas;}))||1, bw=W/inc.length;
     h+='<div class="bdh">Income</div><svg viewBox="0 0 '+W+' 104" width="100%" style="display:block">'+inc.map(function(r,i){
       var hs=r.sal/top*84, hp=r.pas/top*84, bx=(i*bw+bw*0.18).toFixed(1), w=(bw*0.64).toFixed(1);
       return '<rect x="'+bx+'" y="'+(90-hs-hp).toFixed(1)+'" width="'+w+'" height="'+hp.toFixed(1)+'" rx="2" fill="#f8e08e"/>'+
-             '<rect x="'+bx+'" y="'+(90-hs).toFixed(1)+'" width="'+w+'" height="'+hs.toFixed(1)+'" rx="2" fill="#e39ab4"/>'+
+             '<rect x="'+bx+'" y="'+(90-hs).toFixed(1)+'" width="'+w+'" height="'+hs.toFixed(1)+'" rx="2" fill="#7f95e8"/>'+
              ((i===0||i===inc.length-1||i%3===0)?'<text x="'+bx+'" y="102" font-size="9" fill="#8c7980">'+mon(r.m)+'</text>':'');
-    }).join('')+'</svg><div class="gl-leg"><span><i style="background:#e39ab4"></i>Salary</span><span><i style="background:#f8e08e"></i>Passive</span><span>'+mon(inc[inc.length-1].m)+': '+glMoney(inc[inc.length-1].sal+inc[inc.length-1].pas)+'</span></div>';
+    }).join('')+'</svg><div class="gl-leg"><span><i style="background:#7f95e8"></i>Salary</span><span><i style="background:#f8e08e"></i>Passive</span><span>'+mon(inc[inc.length-1].m)+': '+glMoney(inc[inc.length-1].sal+inc[inc.length-1].pas)+'</span></div>';
   }
   h+='<div class="bdh">Where it is · '+mon(last.m)+'</div>'+
     [['Investments',last.inv],['Cash',last.cash],['Other assets',last.oth],['Liabilities',-last.liab]].map(function(r){
