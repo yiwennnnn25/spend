@@ -247,6 +247,22 @@
   .pace.over b{color:var(--blush)}
   .itabs .seg{flex:1;margin-right:8px}
   .itabs .seg button{padding:8px 0;font-size:13px}
+  /* 🍜 Where to go — Makan's places from the laptop, read-only */
+  .mk-find{width:100%;box-sizing:border-box;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:9px 12px;font:inherit;font-size:15px;color:var(--ink);margin:4px 0 8px}
+  .mk-area{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--ink2);font-weight:700;margin:14px 2px 6px}
+  .mk-pl{background:var(--card);border:1px solid var(--line);border-radius:15px;padding:11px 13px;margin-bottom:8px;font-size:13.5px;line-height:1.45}
+  .mk-top{display:flex;align-items:center;gap:6px}
+  .mk-top b{font-size:15px;font-weight:650}
+  .mk-map{margin-left:auto;font-size:12px;font-weight:600;color:var(--lav);text-decoration:none;white-space:nowrap;padding:3px 9px;border:1px solid var(--line);border-radius:10px}
+  .mk-best{display:inline-block;background:linear-gradient(160deg,#fbeef6,#f1e4fa);border-radius:8px;padding:1px 7px;font-weight:600;margin:4px 0 2px}
+  .mk-dl{color:var(--ink);margin-top:3px}
+  .mk-dl.dim{color:var(--ink2)}
+  .mk-vn{margin-top:5px;color:var(--ink)}
+  .mk-pn{margin-top:3px;color:var(--ink2);font-style:italic}
+  .mk-foot{display:flex;align-items:center;gap:8px;margin-top:6px}
+  .mk-foot small{color:var(--ink3);font-size:11px}
+  .mk-foot button{margin-left:auto;border:0;background:var(--mint-bg);color:var(--mint);font-weight:600;font-size:12px;border-radius:10px;padding:5px 10px;cursor:pointer;white-space:nowrap}
+  .mk-here{font-size:12.5px;color:var(--ink2);background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 11px;margin:2px 0 4px}
   .tpick{display:flex;gap:6px;overflow-x:auto;margin:-4px 0 10px;scrollbar-width:none}
   .tpick button{border:1px solid var(--line);background:var(--card);border-radius:14px;padding:6px 12px;font-size:12px;font-weight:600;color:var(--ink2);white-space:nowrap;cursor:pointer}
   .tpick button.on{background:var(--grad);color:#fff;border-color:transparent}
@@ -461,7 +477,7 @@
     <button onclick="undoLast()">↩ Undo</button>
     <button onclick="openSheet('recent')">Recent</button>
     <button onclick="insMonth=null;insTab='month';openSheet('break')">Insights</button>
-    <button onclick="openSheet('makan')">🍜 Makan</button>
+    <button onclick="makanOpen()">🍜 Makan</button>
     <button onclick="glanceOpen()" aria-label="Glance">✦</button>
     <button onclick="openSheet('set')">⚙<span id="cloud"></span></button>
   </div>
@@ -472,7 +488,7 @@
 
 <script>
 "use strict";
-var APP_VERSION='2026-10-19a'; /*APPVER:2026-10-19a*/
+var APP_VERSION='2026-10-22a'; /*APPVER:2026-10-22a*/
 /* Categories are groups with optional sub-categories. An entry stores the
    group in `cat` (so every total, and the suite reading the gist, still
    rolls up by group) and the sub in `sub`. A group with no subs logs
@@ -1480,7 +1496,126 @@ function saveEdit(id){
 /* ---- Makan quick-log: a 10-second food log, separate from the spend
    keypad flow. Writes to its own local key and its own gist file, so it
    never touches spend-data.json or the spend entries/cfg sync path. ---- */
+/* 🍜 is two things (2026-10-22): Where to go — Makan's places from the
+   laptop (Makan publishes them, Glance on the Mac carries them over in the
+   glance gist), read-only, for deciding while out; and Log a meal, which
+   saves where she is with the meal and suggests the Makan place she's at.
+   (A separate quick-note box was tried the same day and dropped — logging
+   a meal properly is the note.) */
+var mk={tab:'go', q:'', f:'all', here:null, hereAt:0, place:''};
+function makanOpen(){
+  openSheet('makan');
+  var at=gl.data&&gl.data.uploadedAt?Date.parse(gl.data.uploadedAt):0;
+  if(!gl.loading&&Date.now()-at>5*60e3) glanceLoad();
+}
 function makanHtml(){
+  return '<h2 class="itabs"><div class="seg">'+
+    '<button class="'+(mk.tab==='go'?'on':'')+'" onclick="mk.tab=\'go\';openSheet(\'makan\')">Where to go</button>'+
+    '<button class="'+(mk.tab==='log'?'on':'')+'" onclick="mk.tab=\'log\';openSheet(\'makan\')">Log a meal</button></div>'+
+    '<button class="x" onclick="closeSheet()">✕</button></h2>'+
+    (mk.tab==='go'?makanGoHtml():makanLogHtml());
+}
+function makanData(){ return gl.data&&gl.data.makan||null; }
+function makanData(){ return gl.data&&gl.data.makan||null; }
+function makanGoHtml(){
+  var h='<div class="mini" id="mkStat" style="text-align:left;margin:0 0 4px">'+makanStatHtml()+'</div>';
+  h+='<input class="mk-find" id="mkFind" type="search" placeholder="Search a place, area or dish" value="'+esc(mk.q)+'" oninput="mk.q=this.value;makanListRedraw()" autocomplete="off">';
+  h+='<div class="tpick" id="mkChips">'+makanChipsHtml()+'</div>';
+  return h+'<div id="mkList">'+makanListHtml()+'</div>';
+}
+/* where she is right now, shared by Near me and the meal log (2 min fresh) */
+function makanLocate(cb,quiet){
+  if(mk.here&&Date.now()-mk.hereAt<120e3){ cb(mk.here); return; }
+  if(!navigator.geolocation){ cb(null); return; }
+  navigator.geolocation.getCurrentPosition(function(pos){
+    mk.here=[+pos.coords.latitude.toFixed(5),+pos.coords.longitude.toFixed(5)]; mk.hereAt=Date.now(); cb(mk.here);
+  },function(){ if(!quiet) toast('Location is off for Spend'); cb(null); },{enableHighAccuracy:true,timeout:8000,maximumAge:60000});
+}
+/* the pinned Makan place within 150 m of here, if any */
+function makanNearest(here){
+  var m=makanData(), best=null;
+  ((m&&m.places)||[]).forEach(function(p){ if(!p.ll) return; var km=makanKm(here,p.ll); if(km<=0.15&&(!best||km<best[1])) best=[p,km]; });
+  return best;
+}
+function makanLogHere(name){ mk.tab='log'; mk.place=name; openSheet('makan'); }
+function makanStatHtml(){
+  var m=makanData();
+  var refresh=gl.loading?' · checking…':' · <a href="#" onclick="glanceLoad();return false" style="color:var(--lav)">refresh</a>';
+  if(!m) return gl.loading?'Fetching your places from your Mac…':esc(gl.err||'Open Makan on your laptop once — Glance brings your places here.')+(gl.loading?'':refresh);
+  return 'Your places from Makan · '+glAgo(m.at||gl.data.uploadedAt)+refresh;
+}
+function makanChipsHtml(){
+  var m=makanData(), P=(m&&m.places)||[];
+  var c=[['all','All'],['return','👍 Go back']];
+  if(P.some(function(p){return p.wish;})) c.push(['wish','✦ Want to try']);
+  if(P.some(function(p){return p.pet;})) c.push(['pet','🐾 Pet friendly']);
+  if(P.some(function(p){return p.ll;})) c.push(['near','📍 Near me']);
+  return c.map(function(x){ return '<button class="'+(mk.f===x[0]?'on':'')+'" onclick="makanFilter(\''+x[0]+'\')">'+x[1]+'</button>'; }).join('');
+}
+function makanFilter(f){
+  mk.f=f;
+  if(f==='near') makanLocate(function(h){ if(!h) mk.f='all'; makanListRedraw(); });
+  makanListRedraw();
+}
+function makanKm(a,b){
+  var R=6371, r=Math.PI/180, dLa=(b[0]-a[0])*r, dLo=(b[1]-a[1])*r;
+  var x=Math.sin(dLa/2)*Math.sin(dLa/2)+Math.cos(a[0]*r)*Math.cos(b[0]*r)*Math.sin(dLo/2)*Math.sin(dLo/2);
+  return 2*R*Math.asin(Math.sqrt(x));
+}
+function makanListRedraw(){
+  if(currentSheet!=='makan'||mk.tab!=='go') return;
+  var c=document.getElementById('mkChips'); if(c) c.innerHTML=makanChipsHtml();
+  var l=document.getElementById('mkList'); if(l) l.innerHTML=makanListHtml();
+}
+function makanCard(p,km){
+  var mark=p.wish?'✦':p.v==='return'?'👍':p.v==='meh'?'😐':'';
+  var q=p.ll?p.ll[0]+','+p.ll[1]:p.n+(p.a?' '+p.a:'');
+  var h='<div class="mk-pl"><div class="mk-top"><b>'+esc(p.n)+'</b>'+(p.pet?' 🐾':'')+(mark?' <span>'+mark+'</span>':'')+
+    '<a class="mk-map" href="https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(q)+'" target="_blank" rel="noopener">'+(km!=null?(km<1?Math.round(km*1000)+' m':km.toFixed(1)+' km')+' ↗':'Map ↗')+'</a></div>';
+  if(p.wish) h+=(p.want?'<div class="mk-dl">want to try: <b>'+esc(p.want)+'</b></div>':'');
+  else if(p.best) h+='<div class="mk-best">★ '+esc(p.best)+'</div>';
+  var other=function(list){ return (list||[]).filter(function(d){ return !p.best||d.toLowerCase()!==p.best.toLowerCase(); }); };
+  if(other(p.love).length) h+='<div class="mk-dl">💗 '+other(p.love).map(esc).join(' · ')+'</div>';
+  if(other(p.good).length) h+='<div class="mk-dl">👍 '+other(p.good).map(esc).join(' · ')+'</div>';
+  if((p.soso||[]).length) h+='<div class="mk-dl dim">😐 '+p.soso.map(esc).join(' · ')+'</div>';
+  if((p.skip||[]).length) h+='<div class="mk-dl dim">👎 skip: '+p.skip.map(esc).join(' · ')+'</div>';
+  if(p.vnote) h+='<div class="mk-vn">“'+esc(p.vnote)+'”</div>';
+  if(p.note) h+='<div class="mk-pn">'+esc(p.note)+'</div>';
+  var foot=[];
+  if(p.last) foot.push('last '+new Date(p.last+'T00:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}));
+  if(p.k) foot.push(p.k+' visit'+(p.k===1?'':'s'));
+  return h+'<div class="mk-foot"><small>'+foot.join(' · ')+'</small>'+
+    '<button onclick="makanLogHere(\''+esc(p.n).replace(/'/g,"\\'")+'\')">＋ Log a meal here</button></div></div>';
+}
+function makanListHtml(){
+  var m=makanData(); if(!m) return '';
+  var P=(m.places||[]).slice(), q=(mk.q||'').trim().toLowerCase();
+  if(q) P=P.filter(function(p){
+    return [p.n,p.a,p.best,p.want,p.note,p.vnote].concat(p.love||[],p.good||[],p.soso||[],p.skip||[]).join(' ').toLowerCase().indexOf(q)>=0;
+  });
+  if(mk.f==='return') P=P.filter(function(p){ return p.v==='return'; });
+  else if(mk.f==='wish') P=P.filter(function(p){ return p.wish; });
+  else if(mk.f==='pet') P=P.filter(function(p){ return p.pet; });
+  if(!P.length) return '<div class="mini">'+(m.places&&m.places.length?'Nothing matches.':'No places in Makan yet.')+'</div>';
+  if(mk.f==='near'){
+    if(!mk.here) return '<div class="mini">Finding where you are…</div>';
+    var pinned=P.filter(function(p){ return p.ll; }).map(function(p){ return [p,makanKm(mk.here,p.ll)]; }).sort(function(a,b){ return a[1]-b[1]; });
+    return pinned.map(function(x){ return makanCard(x[0],x[1]); }).join('')+
+      (P.length>pinned.length?'<div class="mini">'+(P.length-pinned.length)+' without a pin aren\'t listed here</div>':'');
+  }
+  // by area, the area you ate in most recently first; places you only want to try last
+  var been=P.filter(function(p){ return !p.wish; }), wish=P.filter(function(p){ return p.wish; });
+  var by={}, latest={};
+  been.forEach(function(p){ var a=p.a||'Elsewhere'; (by[a]=by[a]||[]).push(p); if((p.last||'')>(latest[a]||'')) latest[a]=p.last||''; });
+  var h=Object.keys(by).sort(function(a,b){ return (latest[b]||'').localeCompare(latest[a]||''); }).map(function(a){
+    return '<div class="mk-area">'+esc(a)+'</div>'+by[a].sort(function(x,y){
+      return (y.v==='return')-(x.v==='return')||(y.last||'').localeCompare(x.last||'');
+    }).map(function(p){ return makanCard(p); }).join('');
+  }).join('');
+  if(wish.length) h+='<div class="mk-area">✦ Want to try</div>'+wish.map(function(p){ return makanCard(p); }).join('');
+  return h;
+}
+function makanLogHtml(){
   var recent=makanEntries.slice().reverse().slice(0,5).map(function(m){
     var d=new Date(m.ts);
     return '<div class="row"><div class="l"><span class="e">🍜</span><div>'+esc(m.place)+(m.dish?' · '+esc(m.dish):'')+
@@ -1488,9 +1623,10 @@ function makanHtml(){
       (m.verdict?' · '+(m.verdict==='return'?'👍 Return':'😐 Meh'):'')+(m.paid===false?' · someone else paid':'')+
       '</small></div></div></div>';
   }).join('') || '<div class="mini">No meals logged yet.</div>';
-  return '<h2>Makan log<button class="x" onclick="closeSheet()">✕</button></h2>'+
+  var names=((makanData()||{}).places||[]).map(function(p){ return '<option value="'+esc(p.n)+'">'; }).join('');
+  return '<div class="mk-here" id="mkHere">📍 Getting your location…</div>'+
     '<div class="bdh">Place</div>'+
-    '<div class="setrow"><input id="mkPlace" placeholder="e.g. Ho Weng Kee" autocomplete="off"></div>'+
+    '<div class="setrow"><input id="mkPlace" list="mkPlaces" placeholder="e.g. Ho Weng Kee" value="'+esc(mk.place)+'" autocomplete="off"><datalist id="mkPlaces">'+names+'</datalist></div>'+
     '<div class="bdh">Dish (optional)</div>'+
     '<div class="setrow"><input id="mkDish" placeholder="e.g. char kway teow" autocomplete="off"></div>'+
     '<div class="bdh">Would you return?</div>'+
@@ -1498,11 +1634,18 @@ function makanHtml(){
     '<div class="bdh">Paid by me</div>'+
     '<div class="seg" id="mkPaid"><button data-v="1" class="on">Yes</button><button data-v="0">No</button></div>'+
     '<div class="bdh">Note (optional)</div>'+
-    '<div class="setrow"><input id="mkNote" placeholder="note" autocomplete="off"></div>'+
+    '<div class="setrow"><input id="mkNote" placeholder="how was it? who were you with?" autocomplete="off"></div>'+
     '<button class="copybtn" onclick="logMakan()">Log meal</button>'+
     '<div class="bdh">Recent</div>'+recent;
 }
 function wireMakan(){
+  if(mk.tab==='log') makanLocate(function(h){
+    var el=document.getElementById('mkHere'); if(!el) return;
+    if(!h){ el.textContent='📍 Location is off — the meal saves without it'; return; }
+    var near=makanNearest(h), inp=document.getElementById('mkPlace');
+    if(near&&inp&&!inp.value){ inp.value=near[0].n; }
+    el.textContent=near?'📍 You\'re at '+near[0].n+' — saved with the meal':'📍 Your location is saved with the meal';
+  },true);
   var vSeg=document.getElementById('mkVerdict');
   if(vSeg) vSeg.addEventListener('click',function(ev){
     if(ev.target.dataset.v===undefined)return;
@@ -1528,18 +1671,19 @@ function logMakan(){
   if(verdict)entry.verdict=verdict;
   entry.paid=paid;
   if(note)entry.note=note;
+  if(mk.here&&Date.now()-mk.hereAt<600e3) entry.geo=mk.here.slice();
+  mk.place='';
   makanEntries.push(entry);
   save(MAKAN_KEY,makanEntries,true);
   schedMakanSync();
   toast('Logged '+place);
   closeSheet();
-  if(navigator.geolocation){
-    navigator.geolocation.getCurrentPosition(function(pos){
-      entry.geo=[+pos.coords.latitude.toFixed(5),+pos.coords.longitude.toFixed(5)];
-      save(MAKAN_KEY,makanEntries,true);
-      schedMakanSync();
-    },function(){},{timeout:4000,maximumAge:300000});
-  }
+  if(!entry.geo) makanLocate(function(h){
+    if(!h) return;
+    entry.geo=h.slice();
+    save(MAKAN_KEY,makanEntries,true);
+    schedMakanSync();
+  },true);
 }
 /* rides the same gist/token/passphrase as the spend sync above (ghReq,
    encryptPayload, cfg.ghToken/gistId/syncPass) but only once that gist
@@ -2563,7 +2707,15 @@ var GLANCE_FILE='glance-data.json', GLANCE_INBOX='glance-inbox.json', GLKEY='xpe
 var gl=(function(){ var c=null; try{ c=JSON.parse(localStorage.getItem(GLKEY)||'null'); }catch(e){}
   return {gistId:c&&c.gistId||'', data:c&&c.data||null, loading:false, err:'', add:'wish', reveal:false, sending:false}; })();
 function glanceSave(){ try{ localStorage.setItem(GLKEY,JSON.stringify({gistId:gl.gistId,data:gl.data})); }catch(e){} }
-function glanceRedraw(){ if(currentSheet==='glance'&&document.getElementById('sheet').classList.contains('open')) openSheet('glance'); }
+function glanceRedraw(){
+  if(!document.getElementById('sheet').classList.contains('open')) return;
+  if(currentSheet==='glance') openSheet('glance');
+  // 🍜 Where to go: only the parts that come from the Mac — leaves the note and search boxes alone
+  else if(currentSheet==='makan'&&mk.tab==='go'){
+    var st=document.getElementById('mkStat'); if(st) st.innerHTML=makanStatHtml();
+    makanListRedraw();
+  }
+}
 function glanceOpen(){ openSheet('glance'); glanceLoad(); }
 function glanceRead(f,cb){
   function parse(t){
