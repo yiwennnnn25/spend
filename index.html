@@ -8,7 +8,9 @@
 <meta name="theme-color" content="#f7eaed">
 <link rel="apple-touch-icon" href="expense_icon.png">
 <link rel="icon" href="expense_icon.png">
-<title>Spend</title>
+<meta name="apple-mobile-web-app-title" content="Lifestyle">
+<title>Lifestyle</title>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600&display=swap" rel="stylesheet">
 <style>
   :root{
     --bg:#f7eaed; --card:#fdf8f5; --card2:#f1e2e5; --line:#ecdade;
@@ -151,10 +153,30 @@
   .key:active{background:var(--card2);transform:scale(.96)}
   .key.act{color:var(--lav)}
 
-  .foot{display:flex;gap:8px;padding:7px 16px calc(8px + var(--pad))}
-  .foot button{flex:1;background:var(--card);border:1px solid var(--line);box-shadow:var(--shadow);
-    color:var(--ink2);font-size:12px;font-weight:600;padding:9px 4px;border-radius:12px;cursor:pointer}
-  .foot button:active{background:var(--card2)}
+  /* Lifestyle (2026-10-23): three rooms at the bottom — Spend, Makan, Glance.
+     The spend-only tools (Recent, Insights, Undo, ⚙) sit in a chip row under
+     the month card instead of crowding the bar. */
+  .spbar{display:flex;align-items:center;gap:6px;padding:8px 16px 0}
+  .spbar button{border:1px solid #ecd3e3;background:linear-gradient(160deg,#fdf6fa,#f6eefc);color:var(--ink2);
+    font-size:12px;font-weight:650;border-radius:999px;padding:6px 12px;cursor:pointer;white-space:nowrap}
+  .spbar button:active{transform:scale(.96)}
+  .spbar .gear{margin-left:auto;width:32px;height:32px;padding:0;border-radius:50%;font-size:14px;position:relative}
+  .spbar .gear #cloud{position:absolute;right:-5px;top:-6px;font-size:11px}
+  .rooms{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:6px 14px calc(6px + var(--pad));position:relative;z-index:31;
+    background:var(--bg);border-top:1px solid var(--line)}
+  .rooms button{border:0;background:none;border-radius:16px;padding:6px 0 5px;cursor:pointer;color:var(--ink2);
+    font-size:11.5px;font-weight:650;display:flex;flex-direction:column;align-items:center;gap:1px;position:relative;transition:background .2s,color .2s}
+  .rooms .ri{font-size:21px;line-height:1.15;transition:transform .2s}
+  .rooms button.on{background:var(--grad);color:#fff;box-shadow:0 4px 14px rgba(199,138,180,.38)}
+  .rooms button.on .ri{transform:translateY(-1px) scale(1.08)}
+  .rooms button.on::after{content:'✦';position:absolute;top:3px;right:16%;font-size:9px;color:#fff;animation:tw 2.8s ease-in-out infinite}
+  .rooms button:active{transform:scale(.96)}
+  /* Makan and Glance open as rooms: the sheet fills the screen above the bar */
+  .sheet.room{background:var(--bg);align-items:stretch}
+  .sheet.room > div{max-height:none;height:100%;border-radius:0;box-shadow:none;
+    padding:calc(14px + env(safe-area-inset-top,0px)) 18px calc(96px + var(--pad))}
+  .sheet.room h2 .x{display:none}
+  @media (prefers-reduced-motion:reduce){.rooms button.on::after{animation:none}}
 
   .sheet{position:fixed;inset:0;background:rgba(60,45,90,.28);display:none;align-items:flex-end;z-index:30}
   .sheet.open{display:flex}
@@ -254,7 +276,8 @@
   .mk-top{display:flex;align-items:center;gap:6px}
   .mk-top b{font-size:15px;font-weight:650}
   .mk-map{margin-left:auto;font-size:12px;font-weight:600;color:var(--lav);text-decoration:none;white-space:nowrap;padding:3px 9px;border:1px solid var(--line);border-radius:10px}
-  .mk-best{display:inline-block;background:linear-gradient(160deg,#fbeef6,#f1e4fa);border-radius:8px;padding:1px 7px;font-weight:600;margin:4px 0 2px}
+  .mk-tops{display:flex;flex-wrap:wrap;gap:5px;margin:5px 0 2px}
+  .mk-best{display:inline-block;background:linear-gradient(160deg,#fbeef6,#f1e4fa);border-radius:8px;padding:1px 7px;font-weight:600}
   .mk-dl{color:var(--ink);margin-top:3px}
   .mk-dl.dim{color:var(--ink2)}
   .mk-vn{margin-top:5px;color:var(--ink)}
@@ -263,6 +286,43 @@
   .mk-foot small{color:var(--ink3);font-size:11px}
   .mk-foot button{margin-left:auto;border:0;background:var(--mint-bg);color:var(--mint);font-weight:600;font-size:12px;border-radius:10px;padding:5px 10px;cursor:pointer;white-space:nowrap}
   .mk-here{font-size:12.5px;color:var(--ink2);background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 11px;margin:2px 0 4px}
+  /* 🎡 Where should we eat? — the laptop Makan wheel, same rules, read-only */
+  .mk-wbtn{width:100%;border:1px solid #ead3ea;background:linear-gradient(150deg,#fdf1f5,#f1e4fa 60%,#fdf5e8);border-radius:14px;padding:10px 12px;margin:0 0 10px;
+    font:600 14px/1.2 -apple-system,BlinkMacSystemFont,sans-serif;color:var(--ink);cursor:pointer;box-shadow:var(--shadow)}
+  .mk-wh{background:#fffdf8;background-image:radial-gradient(rgba(214,51,108,.07) 1px,transparent 1px);background-size:16px 16px;
+    border:1px solid var(--line);border-radius:20px;padding:12px 14px 16px;position:relative}
+  .mk-wh-back{font-size:12.5px;font-weight:600;color:var(--lav);text-decoration:none}
+  .mk-wh-title{font:600 30px/1.1 'Caveat','Noteworthy','Bradley Hand',cursive;color:#5b4566;margin:4px 0 8px}
+  .mk-wh .tpick{margin:0 0 12px}
+  .mk-wh-stage{position:relative;width:min(280px,100%);aspect-ratio:1;margin:8px auto 0}
+  #mkWSvg{width:100%;height:100%;transition:transform 4.2s cubic-bezier(.17,.84,.24,1);filter:drop-shadow(0 8px 18px rgba(199,154,216,.35))}
+  #mkWSvg text{font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-weight:600;fill:#5e4a55}
+  .mk-wh-ptr{position:absolute;left:50%;top:-12px;transform:translateX(-50%);z-index:2;font-size:24px;color:#d6336c;text-shadow:0 2px 4px rgba(214,51,108,.3)}
+  .mk-wh-hub{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:60px;height:60px;border-radius:50%;background:#fff;
+    display:grid;place-items:center;box-shadow:0 4px 18px rgba(199,154,216,.45);cursor:pointer;z-index:1}
+  .mk-wh-hub:active{transform:translate(-50%,-50%) scale(.94)}
+  .mk-heart{width:32px;height:32px;overflow:visible;animation:mkBeat 1.6s ease-in-out infinite;filter:drop-shadow(0 2px 5px rgba(196,181,253,.6))}
+  .mk-tw{position:absolute;font-style:normal;line-height:1;pointer-events:none;animation:mkTw 2.4s ease-in-out infinite}
+  .mk-tw.t1{left:8px;top:10px;font-size:9px;color:#f9a8d4}
+  .mk-tw.t2{right:7px;top:15px;font-size:7px;color:#c4b5fd;animation-delay:.8s}
+  .mk-tw.t3{right:13px;bottom:8px;font-size:8px;color:#e9b3f0;animation-delay:1.6s}
+  @keyframes mkBeat{0%,100%{transform:scale(1)}14%{transform:scale(1.14)}28%{transform:scale(.97)}42%{transform:scale(1.08)}60%{transform:scale(1)}}
+  @keyframes mkTw{0%,100%{opacity:0;transform:scale(.4) rotate(0)}50%{opacity:1;transform:scale(1) rotate(45deg)}}
+  .mk-wh-spin{display:block;margin:16px auto 4px;border:0;background:var(--grad);color:#fff;font-weight:700;font-size:15px;border-radius:16px;padding:11px 30px;cursor:pointer;box-shadow:0 6px 16px rgba(199,154,216,.45)}
+  .mk-wh-spin:disabled{opacity:.6}
+  #mkWRes{margin-top:10px;text-align:center}
+  .mk-wh-none{font:500 20px/1.3 'Caveat','Noteworthy','Bradley Hand',cursive;color:#a08aa9}
+  .mk-wh-place{font-size:22px;font-weight:700;color:var(--ink);line-height:1.2}
+  .mk-wh-area{font-size:12.5px;color:var(--ink2);margin:3px 0 8px}
+  .mk-wh-res .mk-tops{justify-content:center}
+  .mk-wh-medal{display:inline-block;background:#fff7d6;border-radius:999px;padding:3px 10px;font-size:13px}
+  .mk-wh-note{font:500 20px/1.25 'Caveat','Noteworthy','Bradley Hand',cursive;color:#8b5a9e;margin-top:6px}
+  .mk-wh-links{display:flex;gap:8px;justify-content:center;align-items:center;margin-top:10px}
+  .mk-wh-links .mk-map{margin-left:0}
+  .mk-wh-links button{border:0;background:var(--mint-bg);color:var(--mint);font-weight:600;font-size:12px;border-radius:10px;padding:5px 10px;cursor:pointer}
+  .mk-conf{position:absolute;left:50%;top:50%;font-size:16px;pointer-events:none;animation:mkConf 1.4s ease-out forwards}
+  @keyframes mkConf{from{opacity:1;transform:translate(-50%,-50%) rotate(0)}to{opacity:0;transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy))) rotate(260deg)}}
+  @media (prefers-reduced-motion:reduce){.mk-heart,.mk-tw{animation:none}.mk-tw{opacity:.8}#mkWSvg{transition:none}}
   .tpick{display:flex;gap:6px;overflow-x:auto;margin:-4px 0 10px;scrollbar-width:none}
   .tpick button{border:1px solid var(--line);background:var(--card);border-radius:14px;padding:6px 12px;font-size:12px;font-weight:600;color:var(--ink2);white-space:nowrap;cursor:pointer}
   .tpick button.on{background:var(--grad);color:#fff;border-color:transparent}
@@ -443,6 +503,13 @@
     <div class="hfoot" id="sub"></div>
   </header>
 
+  <div class="spbar">
+    <button onclick="openSheet('recent')">Recent</button>
+    <button onclick="insMonth=null;insTab='month';openSheet('break')">Insights</button>
+    <button onclick="undoLast()">↩ Undo</button>
+    <button class="gear" onclick="openSheet('set')" aria-label="Settings">⚙<span id="cloud"></span></button>
+  </div>
+
   <div class="amt zero num" id="amt" onclick="toAmount()"><small>RM</small>0</div>
   <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="hg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f4a7c0"/><stop offset="1" stop-color="#d98bd0"/></linearGradient></defs></svg>
   <div class="himpill" onclick="toggleHim()">💗 for him · tap to cancel</div>
@@ -473,14 +540,11 @@
 
   <div class="nudge" id="nudge" onclick="backupFile()">🛟 It's been a while — <b>tap to save a backup file</b></div>
 
-  <div class="foot">
-    <button onclick="undoLast()">↩ Undo</button>
-    <button onclick="openSheet('recent')">Recent</button>
-    <button onclick="insMonth=null;insTab='month';openSheet('break')">Insights</button>
-    <button onclick="makanOpen()">🍜 Makan</button>
-    <button onclick="glanceOpen()" aria-label="Glance">✦</button>
-    <button onclick="openSheet('set')">⚙<span id="cloud"></span></button>
-  </div>
+  <nav class="rooms" id="rooms">
+    <button data-room="spend" class="on" onclick="goRoom('spend')"><span class="ri">👛</span>Spend</button>
+    <button data-room="makan" onclick="goRoom('makan')"><span class="ri">🍜</span>Makan</button>
+    <button data-room="glance" onclick="goRoom('glance')"><span class="ri">✦</span>Glance</button>
+  </nav>
 
   <div class="sheet" id="sheet"><div id="sheetBody"></div></div>
   <div class="last" id="last"></div>
@@ -488,7 +552,7 @@
 
 <script>
 "use strict";
-var APP_VERSION='2026-10-22a'; /*APPVER:2026-10-22a*/
+var APP_VERSION='2026-10-23b'; /*APPVER:2026-10-23b*/
 /* Categories are groups with optional sub-categories. An entry stores the
    group in `cat` (so every total, and the suite reading the gist, still
    rolls up by group) and the sub in `sub`. A group with no subs logs
@@ -1196,8 +1260,25 @@ function openSheet(kind){
   if(kind==='set') wireSettings();
   if(kind==='edit') wireEdit(editId);
   if(kind==='makan') wireMakan();
+  var inRoom=room!=='spend'&&kind===room;
+  document.getElementById('sheet').classList.toggle('room',inRoom);
 }
-function closeSheet(){document.getElementById('sheet').classList.remove('open');}
+/* rooms (2026-10-23): Spend is the keypad; Makan and Glance are their sheets
+   shown full screen above the bar. A room never closes on its own — closing
+   it (✕ is hidden, but a finished log calls closeSheet) redraws it, and a
+   sheet opened over a room hands back to that room. */
+var room='spend';
+function goRoom(r){
+  room=r;
+  document.querySelectorAll('#rooms [data-room]').forEach(function(b){ b.classList.toggle('on',b.dataset.room===r); });
+  if(r==='spend'){ document.getElementById('sheet').classList.remove('open','room'); currentSheet=null; return; }
+  if(r==='makan') makanOpen(); else glanceOpen();
+  document.getElementById('sheetBody').scrollTop=0;
+}
+function closeSheet(){
+  if(room!=='spend'){ openSheet(room); return; }
+  document.getElementById('sheet').classList.remove('open');
+}
 document.getElementById('sheet').addEventListener('click',function(e){if(e.target.id==='sheet')closeSheet();});
 // Swipe left/right between Recent and Insights (mostly-horizontal gestures only,
 // so it never fights the sheet's vertical scroll).
@@ -1502,7 +1583,7 @@ function saveEdit(id){
    saves where she is with the meal and suggests the Makan place she's at.
    (A separate quick-note box was tried the same day and dropped — logging
    a meal properly is the note.) */
-var mk={tab:'go', q:'', f:'all', here:null, hereAt:0, place:''};
+var mk={tab:'go', q:'', f:'all', here:null, hereAt:0, place:'', wheel:false};
 function makanOpen(){
   openSheet('makan');
   var at=gl.data&&gl.data.uploadedAt?Date.parse(gl.data.uploadedAt):0;
@@ -1519,6 +1600,8 @@ function makanData(){ return gl.data&&gl.data.makan||null; }
 function makanData(){ return gl.data&&gl.data.makan||null; }
 function makanGoHtml(){
   var h='<div class="mini" id="mkStat" style="text-align:left;margin:0 0 4px">'+makanStatHtml()+'</div>';
+  if(mk.wheel) return h+makanWheelHtml();
+  if(makanData()) h+='<button class="mk-wbtn" onclick="makanWheelOpen()">🎡 Where should we eat?</button>';
   h+='<input class="mk-find" id="mkFind" type="search" placeholder="Search a place, area or dish" value="'+esc(mk.q)+'" oninput="mk.q=this.value;makanListRedraw()" autocomplete="off">';
   h+='<div class="tpick" id="mkChips">'+makanChipsHtml()+'</div>';
   return h+'<div id="mkList">'+makanListHtml()+'</div>';
@@ -1529,7 +1612,7 @@ function makanLocate(cb,quiet){
   if(!navigator.geolocation){ cb(null); return; }
   navigator.geolocation.getCurrentPosition(function(pos){
     mk.here=[+pos.coords.latitude.toFixed(5),+pos.coords.longitude.toFixed(5)]; mk.hereAt=Date.now(); cb(mk.here);
-  },function(){ if(!quiet) toast('Location is off for Spend'); cb(null); },{enableHighAccuracy:true,timeout:8000,maximumAge:60000});
+  },function(){ if(!quiet) toast('Location is off for Lifestyle'); cb(null); },{enableHighAccuracy:true,timeout:8000,maximumAge:60000});
 }
 /* the pinned Makan place within 150 m of here, if any */
 function makanNearest(here){
@@ -1564,6 +1647,7 @@ function makanKm(a,b){
 }
 function makanListRedraw(){
   if(currentSheet!=='makan'||mk.tab!=='go') return;
+  if(mk.wheel){ if(!wh.spinning&&!wh.landed) makanWheelDraw(); return; }
   var c=document.getElementById('mkChips'); if(c) c.innerHTML=makanChipsHtml();
   var l=document.getElementById('mkList'); if(l) l.innerHTML=makanListHtml();
 }
@@ -1572,9 +1656,14 @@ function makanCard(p,km){
   var q=p.ll?p.ll[0]+','+p.ll[1]:p.n+(p.a?' '+p.a:'');
   var h='<div class="mk-pl"><div class="mk-top"><b>'+esc(p.n)+'</b>'+(p.pet?' 🐾':'')+(mark?' <span>'+mark+'</span>':'')+
     '<a class="mk-map" href="https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(q)+'" target="_blank" rel="noopener">'+(km!=null?(km<1?Math.round(km*1000)+' m':km.toFixed(1)+' km')+' ↗':'Map ↗')+'</a></div>';
+  // the street or mall she typed, when it's grouped under a neighbourhood
+  if(p.g&&p.a&&p.a.toLowerCase().replace(/[^a-z0-9]/g,'')!==p.g.toLowerCase().replace(/[^a-z0-9]/g,'')) h+='<div class="mk-pn" style="font-style:normal">📍 '+esc(p.a)+'</div>';
   if(p.wish) h+=(p.want?'<div class="mk-dl">want to try: <b>'+esc(p.want)+'</b></div>':'');
-  else if(p.best) h+='<div class="mk-best">★ '+esc(p.best)+'</div>';
-  var other=function(list){ return (list||[]).filter(function(d){ return !p.best||d.toLowerCase()!==p.best.toLowerCase(); }); };
+  // her ranked top 1–3 from Makan (older laptops send only best)
+  var top=p.wish?[]:(p.top&&p.top.length?p.top:(p.best?[p.best]:[]));
+  if(top.length) h+='<div class="mk-tops">'+top.map(function(d,i){ return '<span class="mk-best">'+['🥇','🥈','🥉'][i]+' '+esc(d)+'</span>'; }).join('')+'</div>';
+  var inTop={}; top.forEach(function(d){ inTop[d.toLowerCase()]=1; });
+  var other=function(list){ return (list||[]).filter(function(d){ return !inTop[d.toLowerCase()]; }); };
   if(other(p.love).length) h+='<div class="mk-dl">💗 '+other(p.love).map(esc).join(' · ')+'</div>';
   if(other(p.good).length) h+='<div class="mk-dl">👍 '+other(p.good).map(esc).join(' · ')+'</div>';
   if((p.soso||[]).length) h+='<div class="mk-dl dim">😐 '+p.soso.map(esc).join(' · ')+'</div>';
@@ -1591,7 +1680,7 @@ function makanListHtml(){
   var m=makanData(); if(!m) return '';
   var P=(m.places||[]).slice(), q=(mk.q||'').trim().toLowerCase();
   if(q) P=P.filter(function(p){
-    return [p.n,p.a,p.best,p.want,p.note,p.vnote].concat(p.love||[],p.good||[],p.soso||[],p.skip||[]).join(' ').toLowerCase().indexOf(q)>=0;
+    return [p.n,p.a,p.best,(p.top||[]).join(' '),p.want,p.note,p.vnote].concat(p.love||[],p.good||[],p.soso||[],p.skip||[]).join(' ').toLowerCase().indexOf(q)>=0;
   });
   if(mk.f==='return') P=P.filter(function(p){ return p.v==='return'; });
   else if(mk.f==='wish') P=P.filter(function(p){ return p.wish; });
@@ -1606,7 +1695,8 @@ function makanListHtml(){
   // by area, the area you ate in most recently first; places you only want to try last
   var been=P.filter(function(p){ return !p.wish; }), wish=P.filter(function(p){ return p.wish; });
   var by={}, latest={};
-  been.forEach(function(p){ var a=p.a||'Elsewhere'; (by[a]=by[a]||[]).push(p); if((p.last||'')>(latest[a]||'')) latest[a]=p.last||''; });
+  // Makan's tidy neighbourhood (g) when the laptop sends one, else the area she typed
+  been.forEach(function(p){ var a=p.g||p.a||'Elsewhere'; (by[a]=by[a]||[]).push(p); if((p.last||'')>(latest[a]||'')) latest[a]=p.last||''; });
   var h=Object.keys(by).sort(function(a,b){ return (latest[b]||'').localeCompare(latest[a]||''); }).map(function(a){
     return '<div class="mk-area">'+esc(a)+'</div>'+by[a].sort(function(x,y){
       return (y.v==='return')-(x.v==='return')||(y.last||'').localeCompare(x.last||'');
@@ -1614,6 +1704,168 @@ function makanListHtml(){
   }).join('');
   if(wish.length) h+='<div class="mk-area">✦ Want to try</div>'+wish.map(function(p){ return makanCard(p); }).join('');
   return h;
+}
+/* 🎡 Where should we eat? (2026-10-23) — the laptop Makan wheel on the
+   phone, same rules (MakanCore.wheelPool / wheelSlices / distanceKm):
+   places worth going back to plus the want-to-try list; a place she
+   marked 😐 meh never spins (a wish has no verdict to hold against it).
+   Filters: all, pet friendly, want to try, near me (5 km from here —
+   unpinned places drop out). At most 12 slices. The pick is made first
+   and the wheel turned to it, so the pointer always shows what the card
+   says. Read-only: nothing goes back to Makan. */
+var WH_SLICE=['#fbcfe8','#e9d5ff','#fff3c4','#d9f2e6','#fde2e4','#e3dcfb'];
+var WH_CALM=!!(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+var wh={f:'all', slices:[], rot:0, spinning:false, landed:null};
+// Makan's food stickers, read from the name first, then her top dishes, then what she loved
+var WH_STICKERS=[
+  ['🍕',/\b(pizza|pizzeria|margherita)\b/],['🦆',/\b(duck|canard|peking)\b/],['🌽',/\b(corn)\b/],
+  ['🥬',/\b(cabbage|kailan|kai lan|gai[- ]lan|choy|kangkung|greens)\b/],['🍄',/\b(mushrooms?|champignons?|funghi|porcini|truffle)\b/],
+  ['🍜',/\b(noodles?|mee|mian|laksa|ramen|pho|udon|soba|hor fun|kuey teow|char kway teow|ckt)\b/],
+  ['🍝',/\b(pasta|spaghetti|linguine|gnocchi|ravioli|ravioles|agnolotti|lasagne|lasagna|carbonara|pesto|tagliatelle|penne)\b/],
+  ['🍣',/\b(sushi|sashimi|omakase|maki|nigiri)\b/],['🥟',/\b(dumplings?|dim sum|xiao long bao|xlb|gyoza|wonton|har gow|siew mai|siu mai)\b/],
+  ['🍛',/\b(curry|nasi kandar|banana leaf|briyani|biryani|rendang)\b/],['🍚',/\b(rice|nasi|claypot|bibimbap|risotto)\b/],
+  ['🍔',/\b(burgers?)\b/],['🌮',/\b(tacos?|burrito|quesadilla)\b/],['🥩',/\b(steak|wagyu|ribeye|rib eye|sirloin|beef)\b/],
+  ['🍗',/\b(chicken|ayam)\b/],['🐙',/\b(octopus|squid|sotong|calamari)\b/],['🦐',/\b(prawns?|shrimps?|gambas|udang|lobster|crab)\b/],
+  ['🐟',/\b(fish|salmon|snapper|halibut|cod|ceviche|seafood|ikan)\b/],['🥗',/\b(salad|poke)\b/],['🥣',/\b(soup|soupe|bisque|broth)\b/],
+  ['🥐',/\b(croissant|bakery|boulangerie|pastry|bread|toast|bakes?)\b/],['🍰',/\b(cake|tiramisu|cheesecake|dessert|tart|pudding)\b/],
+  ['🍨',/\b(ice cream|gelato|cendol|ais kacang|bingsu)\b/],['🧋',/\b(boba|bubble tea|milk tea|teh)\b/],['🍵',/\b(matcha|tea house|teahouse)\b/],
+  ['☕',/\b(coffee|kopi|latte|cafe|café|espresso|roastery|roasters)\b/],['🍳',/\b(brunch|eggs?|benedict|breakfast)\b/]
+];
+function whSticker(p){
+  var texts=[p.n].concat(makanTop(p),p.love||[],p.good||[]);
+  for(var t=0;t<texts.length;t++){
+    var s=String(texts[t]||'').trim().toLowerCase().replace(/\s+/g,' '); if(!s) continue;
+    var best=null, at=Infinity;
+    WH_STICKERS.forEach(function(st){ var m=st[1].exec(s); if(m&&m.index<at){ at=m.index; best=st[0]; } });
+    if(best) return best;
+  }
+  return '🍽️';
+}
+function makanTop(p){ return p.wish?[]:(p.top&&p.top.length?p.top:(p.best?[p.best]:[])); }
+function whShort(name){ var s=String(name||'').trim(), h=s.split(/,|\s+[-–—]\s+|\s*:\s+/)[0].trim(); return h.length>=3?h:s; }
+function whPool(){
+  var P=(makanData()||{}).places||[];
+  return P.filter(function(p){
+    if(!p.wish&&p.v==='meh') return false;
+    if(wh.f==='wish'&&!p.wish) return false;
+    if(wh.f==='pet'&&!p.pet) return false;
+    if(wh.f==='near'){ if(!p.ll||!mk.here) return false; if(makanKm(mk.here,p.ll)>5) return false; }
+    return true;
+  });
+}
+function whSlices(pool,n){
+  var list=pool.slice();
+  for(var i=list.length-1;i>0;i--){ var j=Math.floor(Math.random()*(i+1)), t=list[i]; list[i]=list[j]; list[j]=t; }
+  return list.slice(0,n||12);
+}
+function makanWheelOpen(){ mk.wheel=true; wh.landed=null; openSheet('makan'); }
+function makanWheelClose(){ if(wh.spinning) return; mk.wheel=false; wh.landed=null; openSheet('makan'); }
+function makanWheelHtml(){
+  var chips=[['all','All'],['pet','🐾 Pet friendly'],['wish','✧ Want to try'],['near','📍 Near me']];
+  return '<div class="mk-wh"><a href="#" class="mk-wh-back" onclick="makanWheelClose();return false">‹ Back to the list</a>'+
+    '<div class="mk-wh-title">Where should we eat?</div>'+
+    '<div class="tpick" id="mkWf">'+chips.map(function(x){ return '<button data-wf="'+x[0]+'" class="'+(wh.f===x[0]?'on':'')+'" onclick="makanWheelFilter(\''+x[0]+'\')">'+x[1]+'</button>'; }).join('')+'</div>'+
+    '<div class="mk-wh-stage" id="mkWStage"><div class="mk-wh-ptr">▼</div><svg id="mkWSvg" viewBox="-100 -100 200 200"></svg>'+
+      '<div class="mk-wh-hub" role="button" aria-label="Spin" onclick="makanSpin()"><svg class="mk-heart" viewBox="0 0 32 32"><defs><linearGradient id="mkHeartG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f9a8d4"/><stop offset="1" stop-color="#c4b5fd"/></linearGradient></defs>'+
+        '<path d="M16 28C7 21.5 2.5 16 2.5 10.8 2.5 7 5.5 4 9.2 4c2.8 0 5.2 1.6 6.8 4 1.6-2.4 4-4 6.8-4 3.7 0 6.7 3 6.7 6.8C29.5 16 25 21.5 16 28z" fill="url(#mkHeartG)" stroke="#fff" stroke-width="1.2"/>'+
+        '<path d="M7.5 9.5c.6-1.6 2-2.5 3.4-2.4" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" opacity=".85"/></svg>'+
+        '<i class="mk-tw t1">✦</i><i class="mk-tw t2">✦</i><i class="mk-tw t3">✧</i></div></div>'+
+    '<button class="mk-wh-spin" id="mkWSpin" onclick="makanSpin()">🎡 Spin</button>'+
+    '<div id="mkWRes"></div></div>';
+}
+function makanWheelFilter(f){
+  if(wh.spinning) return;
+  if(f==='near'&&!mk.here){
+    makanLocate(function(h){ if(h) makanWheelFilter('near'); else toast('Near me needs your location'); });
+    return;
+  }
+  wh.f=f; wh.landed=null;
+  document.querySelectorAll('#mkWf [data-wf]').forEach(function(b){ b.classList.toggle('on',b.dataset.wf===f); });
+  makanWheelDraw();
+}
+function makanWheelDraw(){
+  var svg=document.getElementById('mkWSvg'), res=document.getElementById('mkWRes'); if(!svg||!res) return;
+  var pool=whPool(), NS='http://www.w3.org/2000/svg';
+  function el(tag,attrs){ var e=document.createElementNS(NS,tag); for(var k in attrs) e.setAttribute(k,attrs[k]); return e; }
+  wh.slices=whSlices(pool,12);
+  // a fresh wheel starts from where the last one stopped, without spinning there
+  wh.rot=wh.rot%360; svg.style.transition='none'; svg.style.transform='rotate('+wh.rot+'deg)';
+  svg.getBoundingClientRect(); svg.style.transition='';
+  svg.innerHTML='';
+  var n=wh.slices.length, a=2*Math.PI/Math.max(n,1), r=96;
+  document.getElementById('mkWSpin').disabled=!n;
+  if(!n){
+    svg.appendChild(el('circle',{r:r,fill:'#f6eef2',stroke:'#fff','stroke-width':2}));
+    res.innerHTML='<div class="mk-wh-none">'+(wh.f==='near'?'Nothing pinned within 5 km of you.':wh.f==='pet'?'No pet-friendly places yet.':
+      wh.f==='wish'?'The want-to-try list is empty.':'Log a few places first — the wheel needs somewhere to land.')+'</div>';
+    return;
+  }
+  wh.slices.forEach(function(p,i){
+    var a0=i*a-Math.PI/2, a1=a0+a;
+    var d=n===1?'M0,-'+r+'A'+r+','+r+' 0 1,1 -0.01,-'+r+'Z'
+      :'M0,0L'+(Math.cos(a0)*r).toFixed(2)+','+(Math.sin(a0)*r).toFixed(2)+'A'+r+','+r+' 0 '+(a>Math.PI?1:0)+',1 '+(Math.cos(a1)*r).toFixed(2)+','+(Math.sin(a1)*r).toFixed(2)+'Z';
+    svg.appendChild(el('path',{d:d,fill:WH_SLICE[i%WH_SLICE.length],stroke:'#fff','stroke-width':2}));
+    var mid=a0+a/2, cx=Math.cos(mid)*60, cy=Math.sin(mid)*60, flip=Math.cos(mid)<0?180:0;
+    var t=el('text',{x:cx.toFixed(1),y:cy.toFixed(1),'text-anchor':'middle','dominant-baseline':'middle','font-size':n>8?8:n>4?10:12,
+      transform:'rotate('+(mid*180/Math.PI+flip).toFixed(1)+' '+cx.toFixed(1)+' '+cy.toFixed(1)+')'});
+    var name=whShort(p.n);
+    t.textContent=(p.wish?'✧ ':'')+(name.length>14?name.slice(0,13)+'…':name);
+    svg.appendChild(t);
+  });
+  res.innerHTML='<div class="mk-wh-none">'+pool.length+' place'+(pool.length===1?'':'s')+' on the wheel'+(pool.length>n?' ('+n+' at a time)':'')+'. Give it a spin.</div>';
+}
+function makanSpin(){
+  var svg=document.getElementById('mkWSvg'), res=document.getElementById('mkWRes');
+  if(wh.spinning||!wh.slices.length||!svg) return;
+  var n=wh.slices.length, k=Math.floor(Math.random()*n), seg=360/n;
+  // turn so slice k's middle ends under the pointer at 12 o'clock
+  var target=360-(k*seg+seg/2);
+  wh.rot+=360*5+((target-wh.rot%360)+360)%360;
+  wh.spinning=true; wh.landed=null;
+  document.getElementById('mkWSpin').disabled=true;
+  res.innerHTML='<div class="mk-wh-none">…</div>';
+  if(WH_CALM) svg.style.transition='none';
+  svg.style.transform='rotate('+wh.rot+'deg)';
+  setTimeout(function(){
+    wh.spinning=false;
+    var b=document.getElementById('mkWSpin'); if(b) b.disabled=false;
+    makanLanded(wh.slices[k]);
+  },WH_CALM?50:4300);
+}
+function makanLanded(p){
+  var res=document.getElementById('mkWRes'); if(!res) return;
+  wh.landed=p;
+  var area=p.a&&p.a!=='Unsorted'?p.a:'';
+  var q=p.ll?p.ll[0]+','+p.ll[1]:p.n+(area?' '+area:'');
+  var links='<div class="mk-wh-links"><a class="mk-map" href="https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(q)+'" target="_blank" rel="noopener">Map ↗</a>'+
+    '<button onclick="makanWheelLog()">＋ Log a meal here</button></div>';
+  var h;
+  if(p.wish){
+    h='<div class="mk-wh-place">✧ '+esc(p.n)+'</div>'+
+      '<div class="mk-wh-area">from your want-to-try list'+(area?' · '+esc(area):'')+(p.pet?' · 🐾':'')+'</div>'+
+      (p.want?'<div class="mk-tops"><span class="mk-wh-medal">✧ '+esc(p.want)+'</span></div>':'')+
+      (p.note?'<div class="mk-wh-note">“'+esc(p.note)+'”</div>':'');
+  } else {
+    var meta=[]; if(area) meta.push(esc(area)); if(p.pet) meta.push('🐾 pet friendly');
+    if(p.last) meta.push('last '+new Date(p.last+'T00:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}));
+    var top=makanTop(p);
+    h='<div class="mk-wh-place">'+whSticker(p)+' '+esc(p.n)+'</div>'+
+      (meta.length?'<div class="mk-wh-area">'+meta.join(' · ')+'</div>':'')+
+      (top.length?'<div class="mk-tops">'+top.map(function(d,i){ return '<span class="mk-wh-medal">'+['🥇','🥈','🥉'][i]+' '+esc(whShort(d))+'</span>'; }).join('')+'</div>':'')+
+      (p.vnote?'<div class="mk-wh-note">“'+esc(p.vnote)+'”</div>':'');
+  }
+  res.innerHTML='<div class="mk-wh-res">'+h+links+'</div>';
+  whConfetti();
+}
+function makanWheelLog(){ var p=wh.landed; if(!p) return; mk.wheel=false; wh.landed=null; makanLogHere(p.n); }
+function whConfetti(){
+  var stage=document.getElementById('mkWStage'); if(WH_CALM||!stage) return;
+  var marks=['✦','♡','★','✧'], tints=['#e39ab4','#c79ad8','#f2c94c','#9fd8bf'];
+  for(var i=0;i<22;i++){
+    var c=document.createElement('span'); c.className='mk-conf'; c.textContent=marks[i%4]; c.style.color=tints[i%4];
+    c.style.setProperty('--dx',Math.round(Math.random()*240-120)+'px'); c.style.setProperty('--dy',Math.round(Math.random()*240-120)+'px');
+    stage.appendChild(c); setTimeout(function(x){ x.remove(); }.bind(null,c),1500);
+  }
 }
 function makanLogHtml(){
   var recent=makanEntries.slice().reverse().slice(0,5).map(function(m){
@@ -1626,19 +1878,22 @@ function makanLogHtml(){
   var names=((makanData()||{}).places||[]).map(function(p){ return '<option value="'+esc(p.n)+'">'; }).join('');
   return '<div class="mk-here" id="mkHere">📍 Getting your location…</div>'+
     '<div class="bdh">Place</div>'+
-    '<div class="setrow"><input id="mkPlace" list="mkPlaces" placeholder="e.g. Ho Weng Kee" value="'+esc(mk.place)+'" autocomplete="off"><datalist id="mkPlaces">'+names+'</datalist></div>'+
+    '<div class="setrow"><input id="mkPlace" list="mkPlaces" placeholder="Where did you eat?" value="'+esc(mk.place)+'" autocomplete="off"><datalist id="mkPlaces">'+names+'</datalist></div>'+
     '<div class="bdh">Dish (optional)</div>'+
-    '<div class="setrow"><input id="mkDish" placeholder="e.g. char kway teow" autocomplete="off"></div>'+
+    '<div class="setrow"><input id="mkDish" placeholder="What did you have?" autocomplete="off"></div>'+
     '<div class="bdh">Would you return?</div>'+
     '<div class="seg" id="mkVerdict"><button data-v="">Skip</button><button data-v="return">Return</button><button data-v="meh">Meh</button></div>'+
     '<div class="bdh">Paid by me</div>'+
     '<div class="seg" id="mkPaid"><button data-v="1" class="on">Yes</button><button data-v="0">No</button></div>'+
+    '<div class="bdh">Pet friendly?</div>'+
+    '<div class="seg" id="mkPet"><button data-v="" class="on">Not sure</button><button data-v="1">🐾 Yes</button></div>'+
     '<div class="bdh">Note (optional)</div>'+
     '<div class="setrow"><input id="mkNote" placeholder="how was it? who were you with?" autocomplete="off"></div>'+
     '<button class="copybtn" onclick="logMakan()">Log meal</button>'+
     '<div class="bdh">Recent</div>'+recent;
 }
 function wireMakan(){
+  if(mk.tab==='go'&&mk.wheel) makanWheelDraw();
   if(mk.tab==='log') makanLocate(function(h){
     var el=document.getElementById('mkHere'); if(!el) return;
     if(!h){ el.textContent='📍 Location is off — the meal saves without it'; return; }
@@ -1650,6 +1905,11 @@ function wireMakan(){
   if(vSeg) vSeg.addEventListener('click',function(ev){
     if(ev.target.dataset.v===undefined)return;
     vSeg.querySelectorAll('button').forEach(function(b){b.classList.toggle('on',b===ev.target);});
+  });
+  var tSeg=document.getElementById('mkPet');
+  if(tSeg) tSeg.addEventListener('click',function(ev){
+    if(ev.target.dataset.v===undefined)return;
+    tSeg.querySelectorAll('button').forEach(function(b){b.classList.toggle('on',b===ev.target);});
   });
   var pSeg=document.getElementById('mkPaid');
   if(pSeg) pSeg.addEventListener('click',function(ev){
@@ -1670,6 +1930,9 @@ function logMakan(){
   if(dish)entry.dish=dish;
   if(verdict)entry.verdict=verdict;
   entry.paid=paid;
+  // only ever a yes — Makan marks the place 🐾; unmarking stays on the laptop
+  var tBtn=document.querySelector('#mkPet button.on');
+  if(tBtn&&tBtn.dataset.v==='1') entry.pet=true;
   if(note)entry.note=note;
   if(mk.here&&Date.now()-mk.hereAt<600e3) entry.geo=mk.here.slice();
   mk.place='';
