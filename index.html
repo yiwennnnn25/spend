@@ -36,6 +36,8 @@
   .month{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--lav);font-weight:700}
   .hday{font-size:11px;color:var(--ink2);font-weight:600}
   .mtot{font-size:32px;font-weight:700;margin-top:2px;letter-spacing:-1px;color:var(--ink);text-align:left;line-height:1.1}
+  .mtot .mlab{font-size:12px;font-weight:600;color:var(--ink3);margin-left:8px;letter-spacing:0}
+  .hout{cursor:pointer}
   .mtot small{font-size:.5em;color:var(--ink3);font-weight:600;margin-right:4px;letter-spacing:0}
   .bar{position:relative;height:9px;background:rgba(255,255,255,.75);border-radius:6px;margin:9px 0 0;overflow:visible}
   .bar > i{position:relative;display:block;height:100%;background:var(--bar);width:0;border-radius:6px;transition:width .4s,background .3s;overflow:hidden}
@@ -553,7 +555,7 @@
 
 <script>
 "use strict";
-var APP_VERSION='2026-11-17a'; /*APPVER:2026-11-17a*/
+var APP_VERSION='2026-11-18a'; /*APPVER:2026-11-18a*/
 /* Categories are groups with optional sub-categories. An entry stores the
    group in `cat` (so every total, and the suite reading the gist, still
    rolls up by group) and the sub in `sub`. A group with no subs logs
@@ -745,7 +747,11 @@ function renderTotals(){
   var md=new Date(monthKey+'-01T00:00:00'), dim=new Date(md.getFullYear(),md.getMonth()+1,0).getDate(), day=new Date().getDate();
   document.getElementById('monthLbl').textContent = md.toLocaleDateString('en-GB',{month:'long'});
   document.getElementById('hday').textContent = 'day '+day+' of '+dim;
-  document.getElementById('mtot').innerHTML = '<small>RM</small>'+fmt(mTot);
+  /* With a budget the big number is everyday money — what the bar under it
+     measures (2026-11-18). Everything logged shows as "all in" on the
+     Excluded line. No budget: the plain month total. */
+  var hsp=cfg.budget>0?budgetSplit(mo):null;
+  document.getElementById('mtot').innerHTML = '<small>RM</small>'+fmt(hsp?hsp.life:mTot)+'<span class="mlab">'+(hsp?'everyday':'spent')+'</span>';
   var st=streak(), fire=st>=2?' · 🔥'+st:'';
   var left='<span>RM <b>'+fmt(tToday)+'</b> today'+fire+'</span>';
   var bar=document.getElementById('bar'), bw=document.getElementById('barw');
@@ -809,8 +815,31 @@ function isTravelEntry(e){ return e.sub==='Travel'||e.cat==='Travel'; }
    at/over RM 1,000 and the parts of a big instalment plan are left out,
    the same money Wealth OS keeps out of its Lifestyle Budget. */
 function isBudgeted(e){ return isEveryday(e); }
-function budgetSplit(mo){ var o={life:0,trip:0,one:0}; mo.forEach(function(e){ if(isBudgeted(e)) o.life+=e.amt; else if(e.trip||isTravelEntry(e)) o.trip+=e.amt; else o.one+=e.amt; }); return o; }
-function leftOutHtml(sp){ var b=[]; if(sp.trip>0) b.push('✈️ RM '+fmt(sp.trip)); if(sp.one>0) b.push('one-offs RM '+fmt(sp.one)); return b.length?'<div class="hout">Budget counts everyday only · left out: '+b.join(' · ')+'</div>':''; }
+/* Not-everyday money is named for what it is (2026-11-17, hers: "one-offs"
+   was confusing): Travel, Instalments (parts of a plan worth RM 1,000+),
+   Exceptional (a single spend of RM 1,000+). */
+function exclKind(e,bp){ if(isBudgeted(e)) return 'life'; if(e.trip||isTravelEntry(e)) return 'trip'; if((bp||bigPlanParts())[e.id||e.ts]) return 'inst'; return 'exc'; }
+function budgetSplit(mo){ var o={life:0,trip:0,inst:0,exc:0,all:0}, bp=bigPlanParts(); mo.forEach(function(e){ o[exclKind(e,bp)]+=e.amt; o.all+=e.amt; }); return o; }
+var EXCL_LBL={trip:'✈️ Travel',inst:'Installments',exc:'Exceptional'};
+function excludedText(sp){ var b=['trip','inst','exc'].filter(function(k){return sp[k]>0;}).map(function(k){return EXCL_LBL[k]+' RM '+fmt(sp[k]);}); return b.length?'Excluded: '+b.join(' · ')+' · all in RM '+fmt(sp.all)+' ›':''; }
+/* Tap the Excluded line: the entries behind each part, each opens to edit. */
+var exclKey=null;
+function openExcl(k){ exclKey=k; openSheet('excl'); }
+function exclHtml(k){
+  var mo=monthOf(k), bp=bigPlanParts(), g={trip:[],inst:[],exc:[]};
+  mo.forEach(function(e){ var t=exclKind(e,bp); if(g[t]) g[t].push(e); });
+  var mName=new Date(k+'-01T00:00:00').toLocaleDateString('en-GB',{month:'long'});
+  var out=['trip','inst','exc'].filter(function(t){return g[t].length;}).map(function(t){
+    var tot=g[t].reduce(function(a,e){return a+e.amt;},0);
+    return '<div class="bdh">'+EXCL_LBL[t]+' · RM '+fmt(tot)+'</div>'+g[t].sort(function(a,b){return a.ts<b.ts?1:-1;}).map(function(e){
+      return '<div class="row rowc" onclick="openEdit(\''+e.id+'\')"><div class="l"><span class="e">'+e.e+'</span><div>'+esc(catLabel(e))+(e.note?' · '+esc(e.note):'')+
+        '<small>'+new Date(e.ts).toLocaleDateString('en-GB',{day:'numeric',month:'short'})+' · '+e.method+'</small></div></div>'+
+        '<div class="l"><b class="num">RM '+fmt(e.amt)+'</b></div></div>'; }).join('');
+  }).join('') || '<div class="mini">Nothing excluded this month.</div>';
+  return '<h2>Excluded in '+mName+'<button class="x" onclick="closeSheet()">✕</button></h2>'+
+    '<div class="mini" style="text-align:left;margin:-4px 0 8px">Not counted in your everyday budget — Wealth OS keeps these outside the Lifestyle Budget too.</div>'+out;
+}
+function leftOutHtml(sp){ var t=excludedText(sp); return t?'<div class="hout" onclick="event.stopPropagation();openExcl(\''+monthKey+'\')">'+t+'</div>':''; }
 function plannedTrips(){ return (cfg.trips||[]).filter(function(t){ return !t.start&&!t.end; }); }
 function newTripNamed(){
   var n=prompt('Name the trip','e.g. Japan Dec'); n=(n||'').trim();
@@ -1262,6 +1291,7 @@ function openSheet(kind){
   else if(kind==='merge') body.innerHTML=mergeHtml();
   else if(kind==='glance') body.innerHTML=glanceHtml();
   else if(kind==='tripstart') body.innerHTML=tripStartHtml();
+  else if(kind==='excl') body.innerHTML=exclHtml(exclKey);
   else body.innerHTML=setHtml();
   currentSheet=kind;
   document.getElementById('sheet').classList.add('open');
@@ -1433,7 +1463,7 @@ function toLocalInput(ts){
 }
 
 var editId=null;
-function openEdit(id){ editId=id; editBack=(['day','drill','refile','break','us'].indexOf(currentSheet)>=0?currentSheet:'recent'); openSheet('edit'); }
+function openEdit(id){ editId=id; editBack=(['day','drill','refile','break','us','excl'].indexOf(currentSheet)>=0?currentSheet:'recent'); openSheet('edit'); }
 var CSEP='\u0001'; // group/sub separator inside a <select> value
 function catOptions(e){
   var cur=e.cat+CSEP+(e.sub||''), seen=false;
@@ -2152,7 +2182,7 @@ function trendHtml(){
 
   return insTabs()+verdict+
     '<div class="bdh">Everyday, month by month · tap a bar</div>'+chart+moved+
-    (bigRows?'<div class="bdh">One-offs &amp; installments · kept out of the trend</div>'+bigRows:'')+
+    (bigRows?'<div class="bdh">Exceptional &amp; installments · kept out of the trend</div>'+bigRows:'')+
     '<div class="bdh">Need share · last 6 months</div>'+needRow+
     (top?'<div class="bdh">'+yr+' so far · RM '+fmt(ytdTot)+'</div>'+top:'')+himTrend()+inst;
 }
@@ -2233,7 +2263,12 @@ function breakHtml(){
 
   /* ── the month, and how it's going ── */
   var proj=cur?tot/day*dim:tot, budget=cfg.budget||0, bsp=budgetSplit(mo), btot=bsp.life, bproj=cur?btot/day*dim:btot;
-  var line=cur?'Day '+day+' of '+dim+' · on pace for <b class="'+(budget&&bproj>budget?'over':'')+'">RM '+fmt(proj)+'</b>'
+  /* Pace (fixed 2026-11-18): only everyday money is stretched over the
+     month. Instalments, Exceptional and Travel happen once, so stretching
+     them made the old figure far too high, and its red came from bproj
+     while it showed proj. */
+  proj=cur?btot/day*dim+(tot-btot):tot;
+  var line=cur?'Day '+day+' of '+dim+' · '+(budget?'everyday on pace for <b class="'+(bproj>budget?'over':'')+'">RM '+fmt(bproj)+'</b>':'on pace for <b>RM '+fmt(proj)+'</b>')
               :'Full month · '+mo.length+' log'+(mo.length===1?'':'s');
   var barW=budget?Math.min(btot/budget,1)*100:0;
   var cmp='';
@@ -2246,7 +2281,7 @@ function breakHtml(){
     '<div class="iline num">'+line+'</div>'+
     (budget?'<div class="ibud"><i style="width:'+barW.toFixed(1)+'%;background:'+(btot>budget?'var(--blush)':'var(--bar)')+'"></i></div>'+
       '<div class="iline small num">Everyday RM '+fmt(btot)+' · '+(btot>budget?'RM '+fmt(btot-budget)+' over':'RM '+fmt(budget-btot)+' left')+' of RM '+fmt(budget)+'</div>'+
-      ((bsp.trip+bsp.one)>0?'<div class="iline small num" style="opacity:.7">Left out: '+[bsp.trip>0?'✈️ RM '+fmt(bsp.trip):'',bsp.one>0?'one-offs RM '+fmt(bsp.one):''].filter(Boolean).join(' · ')+'</div>':''):'')+
+      (excludedText(bsp)?'<div class="iline small num" style="opacity:.7;cursor:pointer" onclick="openExcl(\''+key+'\')">'+excludedText(bsp)+'</div>':''):'')+
     (cmp?'<div class="ichips">'+cmp+(pTot>0?'<span class="ichip">'+pName+' total RM '+fmt(pTot)+'</span>':'')+'</div>':'')+
   '</div>';
 
@@ -2377,7 +2412,7 @@ function setHtml(){
   return '<h2>Settings<button class="x" onclick="closeSheet()">✕</button></h2>'+
     '<div class="sjump">'+jumps.map(function(j){return '<button onclick="setJump(\''+j[0]+'\')">'+j[1]+'</button>';}).join('')+'</div>'+
     '<div class="bdh" id="s-budget">Monthly everyday budget (RM)</div>'+
-    '<div class="mini" style="text-align:left;margin:-4px 0 8px">Trips, Travel, one-offs ≥ RM 1,000 and big installment plans aren\'t counted — set this to your Wealth OS Lifestyle Budget.</div>'+
+    '<div class="mini" style="text-align:left;margin:-4px 0 8px">Travel, Installments (plans worth RM 1,000+) and Exceptional (a single spend of RM 1,000+) aren\'t counted — set this to your Wealth OS Lifestyle Budget.</div>'+
     '<div class="setrow"><input id="budgetInp" type="number" inputmode="numeric" value="'+(cfg.budget||'')+'" placeholder="e.g. 8000"></div>'+
     '<div class="bdh" id="s-lim">Limits per group</div>'+
     '<div class="sfold'+(setOpen.lim?' on':'')+'" id="sf-lim" onclick="setFold(\'lim\')"><span>🎯</span><div>Monthly limit per group<small>'+(nLim?nLim+' set':'none set')+' · leave blank for none</small></div><span class="chev">›</span></div>'+
@@ -3447,7 +3482,7 @@ window.addMethod=addMethod;window.rmMethod=rmMethod;window.exportAll=exportAll;
 window.backupFile=backupFile;window.doImport=doImport;
 window.connectSync=connectSync;window.disconnectSync=disconnectSync;window.pullSync=pullSync;
 window.hideLast=hideLast;window.lastOpenCat=lastOpenCat;window.lastGroups=lastGroups;window.lastSetGroup=lastSetGroup;window.lastSetSub=lastSetSub;window.lastFlipNeed=lastFlipNeed;window.lastCycleMethod=lastCycleMethod;
-window.openEdit=openEdit;window.saveEdit=saveEdit;window.openDay=openDay;
+window.openEdit=openEdit;window.saveEdit=saveEdit;window.openDay=openDay;window.openExcl=openExcl;
 window.splitInstallments=splitInstallments;window.openDrill=openDrill;window.insShift=insShift;window.insGo=insGo;window.setCur=setCur;window.endTrip=endTrip;window.fxFetch=fxFetch;
 window.logMakan=logMakan;
 
