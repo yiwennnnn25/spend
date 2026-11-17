@@ -49,6 +49,7 @@
   .hfoot .hst{font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px}
   .hst.ok{background:var(--need-bg);color:var(--need)} .hst.hot{background:var(--want-bg);color:var(--want)} .hst.over{background:#fbe3e8;color:var(--blush)}
   .hset{color:var(--lav);font-weight:700}
+  .hfoot{flex-wrap:wrap} .hout{flex-basis:100%;font-size:11px;color:var(--ink3);margin-top:4px}
 
   .amt{font-size:38px;font-weight:700;text-align:center;padding:2px 0 12px;letter-spacing:-1.5px;min-height:42px;color:var(--ink)}
   .amt small{font-size:20px;color:var(--ink3);font-weight:600;margin-right:5px}
@@ -552,7 +553,7 @@
 
 <script>
 "use strict";
-var APP_VERSION='2026-10-23b'; /*APPVER:2026-10-23b*/
+var APP_VERSION='2026-11-17a'; /*APPVER:2026-11-17a*/
 /* Categories are groups with optional sub-categories. An entry stores the
    group in `cat` (so every total, and the suite reading the gist, still
    rolls up by group) and the sub in `sub`. A group with no subs logs
@@ -751,15 +752,16 @@ function renderTotals(){
   bw.querySelectorAll('.tick,.tip').forEach(function(x){x.remove();});
   var pacePct=(day/dim)*100;
   if(cfg.budget>0){
-    var r=mTot/cfg.budget, w=Math.min(r,1)*100, should=cfg.budget*day/dim, st2;
+    var sp=budgetSplit(mo), bTot=sp.life;
+    var r=bTot/cfg.budget, w=Math.min(r,1)*100, should=cfg.budget*day/dim, st2;
     bar.style.width=w+'%';
     bar.style.background = r>1?'var(--blush)': r>0.85?'var(--peach)':'var(--bar)';
     /* the tick is where an even month would be today */
     bw.insertAdjacentHTML('beforeend','<span class="tick" style="left:'+pacePct.toFixed(1)+'%"></span>'+(w>3&&r<=1?'<span class="tip" style="left:'+w.toFixed(1)+'%">✦</span>':''));
-    if(r>1) st2='<span class="hst over">RM '+fmt(mTot-cfg.budget)+' over</span>';
-    else if(mTot>should*1.1) st2='<span class="hst hot">RM '+fmt(cfg.budget-mTot)+' left · ahead of pace</span>';
-    else st2='<span class="hst ok">RM '+fmt(cfg.budget-mTot)+' left · on track</span>';
-    document.getElementById('sub').innerHTML=left+st2;
+    if(r>1) st2='<span class="hst over">RM '+fmt(bTot-cfg.budget)+' over</span>';
+    else if(bTot>should*1.1) st2='<span class="hst hot">RM '+fmt(cfg.budget-bTot)+' left · ahead of pace</span>';
+    else st2='<span class="hst ok">RM '+fmt(cfg.budget-bTot)+' left · on track</span>';
+    document.getElementById('sub').innerHTML=left+st2+leftOutHtml(sp);
   } else {
     bar.style.width=pacePct+'%'; bar.style.background='var(--bar)'; // no budget: the bar is just the month going by
     document.getElementById('sub').innerHTML=left+'<span class="hset" onclick="event.stopPropagation();openSheet(\'set\')">set a budget ›</span>';
@@ -802,6 +804,13 @@ function startTrip(c){
 var tripAsk=null, pendTrip=null;
 function isTravelPick(g,s){ return !!((s&&s.n==='Travel')||(g&&g.n==='Travel')); }
 function isTravelEntry(e){ return e.sub==='Travel'||e.cat==='Travel'; }
+/* What the budget counts: everyday only — isEveryday below, the one rule
+   Trends and the laptop use too (2026-11-17). Trips, Travel, one-offs
+   at/over RM 1,000 and the parts of a big instalment plan are left out,
+   the same money Wealth OS keeps out of its Lifestyle Budget. */
+function isBudgeted(e){ return isEveryday(e); }
+function budgetSplit(mo){ var o={life:0,trip:0,one:0}; mo.forEach(function(e){ if(isBudgeted(e)) o.life+=e.amt; else if(e.trip||isTravelEntry(e)) o.trip+=e.amt; else o.one+=e.amt; }); return o; }
+function leftOutHtml(sp){ var b=[]; if(sp.trip>0) b.push('✈️ RM '+fmt(sp.trip)); if(sp.one>0) b.push('one-offs RM '+fmt(sp.one)); return b.length?'<div class="hout">Budget counts everyday only · left out: '+b.join(' · ')+'</div>':''; }
 function plannedTrips(){ return (cfg.trips||[]).filter(function(t){ return !t.start&&!t.end; }); }
 function newTripNamed(){
   var n=prompt('Name the trip','e.g. Japan Dec'); n=(n||'').trim();
@@ -2009,12 +2018,30 @@ function vsUsual(v,usual,inProgress,day,dim){
   if(dp<=-20) return '<span class="ichip dn">▼'+(-dp)+'%</span>';
   return '';
 }
-/* Everyday = what her month normally costs: under RM 1,000 and not an
-   installment part (Wealth OS reassembles those into the whole purchase,
-   so a RM 350/mo laser plan isn't lifestyle there either). The trend is
-   read on everyday only; one-offs and installments are listed, not stacked,
-   so one big buy can't hide which way the ordinary months are going. */
-function isEveryday(e){ return e.amt<ONE_OFF && !e.inst; }
+/* Everyday = what her month normally costs — the laptop's rule, to the
+   letter (2026-11-17; SpendLinkCore.lifestyle there): under RM 1,000, not
+   a trip, not Travel, and not a part of an instalment plan worth RM 1,000
+   or more (Wealth OS files that plan whole, as a one-off). A SMALL plan's
+   parts stay everyday. Before this, trips and Travel counted here and a
+   hand-typed plan ("Scalp treatment 1/12") did too, so October read about
+   RM 3,000 higher on the phone than on the laptop. */
+function isEveryday(e){ return e.amt>0 && e.amt<ONE_OFF && !e.trip && !isTravelEntry(e) && !bigPlanParts()[e.id||e.ts]; }
+/* Parts of plans worth RM 1,000+ (plan total = the tagged total, else the
+   average part x the number of parts). Rebuilt once per redraw. */
+var _bigPlan=null;
+function bigPlanParts(){
+  if(_bigPlan) return _bigPlan;
+  var g={}, out={};
+  entries.forEach(function(e){ if(!e||!e.ts||!(e.amt>0)) return; var k=planKey(e); if(!k) return;
+    var pn=partNo(e), p=g[k]||(g[k]={n:0,tot:0,parts:[]});
+    if(e.inst&&e.inst.g){ p.n=+e.inst.n||p.n; p.tot=+e.inst.tot||p.tot; } else if(pn) p.n=pn.n;
+    p.parts.push(e); });
+  Object.keys(g).forEach(function(k){ var p=g[k], n=p.n>=2?p.n:p.parts.length;
+    var per=p.parts.reduce(function(a,e){return a+e.amt;},0)/p.parts.length, tot=p.tot>0?p.tot:per*n;
+    if(tot>=ONE_OFF) p.parts.forEach(function(e){ out[e.id||e.ts]=1; }); });
+  _bigPlan=out; setTimeout(function(){ _bigPlan=null; },0);
+  return out;
+}
 function trendHtml(){
   function sum(a,e){return a+e.amt;}
   function avgOf(a){ return a.length?a.reduce(function(s,v){return s+v;},0)/a.length:0; }
@@ -2071,7 +2098,7 @@ function trendHtml(){
       '<span class="tm">'+mName(m)+(m.cur?'<br><b class="num">'+fmt(m.life)+'</b> so far':'')+'</span></div>';
   }).join('');
   var chart='<div class="tchart"><div class="tbars">'+bars+'</div></div>'+
-    '<div class="tleg"><span><i class="life"></i>Everyday (under RM '+fmt(ONE_OFF)+', no installments)</span>'+(usual&&cur?'<span><i class="lg"></i>Usual month RM '+fmt(usual)+'</span>':'')+'</div>';
+    '<div class="tleg"><span><i class="life"></i>Everyday (under RM '+fmt(ONE_OFF)+' · no trips or big installments)</span>'+(usual&&cur?'<span><i class="lg"></i>Usual month RM '+fmt(usual)+'</span>':'')+'</div>';
 
   /* What moved: each group's last full month against its months before,
      biggest RM swing first — the "why" behind the verdict. */
@@ -2205,10 +2232,10 @@ function breakHtml(){
   var hasOlder=entries.some(function(e){return entryMonth(e)<key;});
 
   /* ── the month, and how it's going ── */
-  var proj=cur?tot/day*dim:tot, budget=cfg.budget||0;
-  var line=cur?'Day '+day+' of '+dim+' · on pace for <b class="'+(budget&&proj>budget?'over':'')+'">RM '+fmt(proj)+'</b>'
+  var proj=cur?tot/day*dim:tot, budget=cfg.budget||0, bsp=budgetSplit(mo), btot=bsp.life, bproj=cur?btot/day*dim:btot;
+  var line=cur?'Day '+day+' of '+dim+' · on pace for <b class="'+(budget&&bproj>budget?'over':'')+'">RM '+fmt(proj)+'</b>'
               :'Full month · '+mo.length+' log'+(mo.length===1?'':'s');
-  var barW=budget?Math.min(tot/budget,1)*100:0;
+  var barW=budget?Math.min(btot/budget,1)*100:0;
   var cmp='';
   if(pToDate>0){
     var dl=Math.round((tot-pToDate)/pToDate*100);
@@ -2217,8 +2244,9 @@ function breakHtml(){
   var hero='<div class="ihero">'+
     '<div class="ilabel">Spent</div><div class="itot num">RM '+fmt(tot)+'</div>'+
     '<div class="iline num">'+line+'</div>'+
-    (budget?'<div class="ibud"><i style="width:'+barW.toFixed(1)+'%;background:'+(tot>budget?'var(--blush)':'var(--bar)')+'"></i></div>'+
-      '<div class="iline small num">'+(tot>budget?'RM '+fmt(tot-budget)+' over':'RM '+fmt(budget-tot)+' left')+' of RM '+fmt(budget)+'</div>':'')+
+    (budget?'<div class="ibud"><i style="width:'+barW.toFixed(1)+'%;background:'+(btot>budget?'var(--blush)':'var(--bar)')+'"></i></div>'+
+      '<div class="iline small num">Everyday RM '+fmt(btot)+' · '+(btot>budget?'RM '+fmt(btot-budget)+' over':'RM '+fmt(budget-btot)+' left')+' of RM '+fmt(budget)+'</div>'+
+      ((bsp.trip+bsp.one)>0?'<div class="iline small num" style="opacity:.7">Left out: '+[bsp.trip>0?'✈️ RM '+fmt(bsp.trip):'',bsp.one>0?'one-offs RM '+fmt(bsp.one):''].filter(Boolean).join(' · ')+'</div>':''):'')+
     (cmp?'<div class="ichips">'+cmp+(pTot>0?'<span class="ichip">'+pName+' total RM '+fmt(pTot)+'</span>':'')+'</div>':'')+
   '</div>';
 
@@ -2348,7 +2376,8 @@ function setHtml(){
   var jumps=[['budget','Budget'],['lim','Limits'],['travel','Travel'],['acc','Accounts'],['cats','Groups'],['sync','Sync'],['data','Data']];
   return '<h2>Settings<button class="x" onclick="closeSheet()">✕</button></h2>'+
     '<div class="sjump">'+jumps.map(function(j){return '<button onclick="setJump(\''+j[0]+'\')">'+j[1]+'</button>';}).join('')+'</div>'+
-    '<div class="bdh" id="s-budget">Monthly budget (RM)</div>'+
+    '<div class="bdh" id="s-budget">Monthly everyday budget (RM)</div>'+
+    '<div class="mini" style="text-align:left;margin:-4px 0 8px">Trips, Travel, one-offs ≥ RM 1,000 and big installment plans aren\'t counted — set this to your Wealth OS Lifestyle Budget.</div>'+
     '<div class="setrow"><input id="budgetInp" type="number" inputmode="numeric" value="'+(cfg.budget||'')+'" placeholder="e.g. 8000"></div>'+
     '<div class="bdh" id="s-lim">Limits per group</div>'+
     '<div class="sfold'+(setOpen.lim?' on':'')+'" id="sf-lim" onclick="setFold(\'lim\')"><span>🎯</span><div>Monthly limit per group<small>'+(nLim?nLim+' set':'none set')+' · leave blank for none</small></div><span class="chev">›</span></div>'+
@@ -2557,9 +2586,38 @@ function rmSub(i,j){
    same category, same N. Re-filing one part re-files the whole plan. */
 function planKey(e){
   if(e.inst&&e.inst.g) return 'g:'+e.inst.g;
-  var m=String(e.note||'').match(/^(.*?)\s*(\d+)\/(\d+)\s*$/);
-  if(m&&+m[3]>=2&&+m[2]<=+m[3]) return 'n:'+m[1].trim().toLowerCase()+'|'+e.cat+'|'+m[3];
-  return null;
+  var p=planNote(e); if(!p) return null;
+  var c=planCtx();
+  if(c.date[p.low]) return null;
+  return c.clash[p.low] ? 'n:'+p.desc+'|'+e.cat+'|'+p.n : p.low;
+}
+/* A hand-typed plan is a note ending "3/12". Same rule as the laptop
+   (2026-11-17): keyed by its description (any capitals) and length — not
+   its category, so re-filing a plan keeps it one plan; part 15 of 10 is
+   not a part; and two things only the whole list can tell (planCtx):
+   · the same part number in two categories = two purchases, told apart
+     by category again;
+   · a lone note whose "k/N" is the day/month it was logged (or the day
+     before) is a date — "Massage 5/11" is not an 11-part plan. */
+function planNote(e){
+  var m=String(e.note||'').match(/^(.*?)\s*(\d+)\s*\/\s*(\d+)\s*$/); if(!m) return null;
+  var i=+m[2], n=+m[3]; if(!(n>=2&&i>=1&&i<=n)) return null;
+  var desc=m[1].trim().toLowerCase();
+  return {low:'n:'+desc+'|'+n, desc:desc, i:i, n:n};
+}
+var _planCtx=null;
+function planCtx(){
+  if(_planCtx) return _planCtx;
+  var seen={}, lone={}, c={clash:{},date:{}};
+  entries.forEach(function(e){ if(!e||!e.ts||!(e.amt>0)||(e.inst&&e.inst.g)) return; var p=planNote(e); if(!p) return;
+    var s=seen[p.low]||(seen[p.low]={});
+    if(s[p.i]==null) s[p.i]=e.cat||''; else if(s[p.i]!==(e.cat||'')) c.clash[p.low]=1;
+    var l=lone[p.low]||(lone[p.low]={count:0}); l.count++; l.e=e; l.p=p; });
+  Object.keys(lone).forEach(function(k){ var l=lone[k]; if(l.count!==1) return;
+    var d=new Date(l.e.ts); if(isNaN(d.getTime())) return; var y=new Date(d.getTime()-864e5);
+    if((l.p.i===d.getDate()&&l.p.n===d.getMonth()+1)||(l.p.i===y.getDate()&&l.p.n===y.getMonth()+1)) c.date[k]=1; });
+  _planCtx=c; setTimeout(function(){ _planCtx=null; },0);
+  return c;
 }
 /* Every installment plan and what is still to pay on it. A plan can be
    split ahead (future-dated parts exist) or logged month by month as she
@@ -2572,8 +2630,8 @@ function planRow(p){
 }
 function partNo(e){
   if(e.inst&&e.inst.i) return {i:+e.inst.i,n:+e.inst.n};
-  var m=String(e.note||'').match(/(\d+)\/(\d+)\s*$/);
-  return m?{i:+m[1],n:+m[2]}:null;
+  var p=planNote(e);
+  return p?{i:p.i,n:p.n}:null;
 }
 function addMonthsTs(ts,n){ var d=new Date(ts), x=new Date(d.getTime()), day=d.getDate(); x.setDate(1); x.setMonth(x.getMonth()+n); x.setDate(Math.min(day,new Date(x.getFullYear(),x.getMonth()+1,0).getDate())); return x; }
 function activePlans(){
